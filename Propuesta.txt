@@ -1,0 +1,54 @@
+Propuesta actualizada de TFM
+
+1. Tema y objetivo general
+El trabajo se sitúa en el ámbito de las finanzas cuantitativas y la computación cuántica aplicada. El objetivo general es evaluar, de forma reproducible, el rendimiento de métodos clásicos y cuánticos híbridos para un problema de selección discreta de carteras basado en el modelo media-varianza.
+
+2. Pregunta de investigación
+En qué condiciones un enfoque cuántico híbrido de la era NISQ (QAOA, y de forma opcional VQE como extensión) resulta competitivo frente a métodos clásicos en términos de calidad de solución, robustez y costo computacional para la selección discreta de activos financieros.
+
+3. Alcance del trabajo (acotación)
+- Se trabajará con datos históricos reales (no con seguimiento en tiempo real) obtenidos desde Yahoo Finance.
+- El problema se formulará como QUBO/Ising a partir de una versión discretizada del modelo media-varianza con restricción de cardinalidad.
+- Se compararán, como mínimo, dos baselines clásicos (uno exacto y uno heurístico) frente a un método cuántico híbrido principal (QAOA).
+- La experimentación se centrará en simulador (ideal y con ruido). La ejecución en hardware real de IBM Quantum se considerará opcional y exploratoria.
+- Se limitarán los tamaños del problema a escenarios pequeños y medianos para garantizar trazabilidad y análisis profundo.
+
+4. Contribución principal
+La contribución del TFM será el diseño y validación de un benchmark aplicado y replicable para comparar enfoques clásicos y cuánticos híbridos en selección de carteras discretas, con un protocolo experimental claro y métricas homogéneas de evaluación.
+
+5. Hipótesis de trabajo
+H1. En tamaños pequeños, los métodos clásicos exactos obtendrán mejor calidad de solución y menor costo computacional total.
+H2. QAOA podrá aproximar soluciones competitivas en determinados escenarios, aunque con mayor sensibilidad a la configuración y al ruido.
+H3. El ruido y la profundidad de circuito limitarán el rendimiento en entornos NISQ reales frente a simulación ideal.
+
+6. Criterios y métricas de comparación
+Se emplearán tres bloques de métricas:
+
+A) Calidad financiera de la cartera
+- Rentabilidad esperada.
+- Volatilidad (riesgo).
+- Ratio de Sharpe.
+
+B) Calidad de optimización
+- Valor de la función objetivo.
+- Gap relativo frente al óptimo o mejor solución conocida.
+- Tasa de factibilidad (cumplimiento de restricciones).
+
+C) Costo computacional y robustez
+- Tiempo de ejecución total.
+- Número de evaluaciones iterativas.
+- Número de shots, qubits y profundidad de circuito (en cuántico).
+- Variabilidad de resultados entre semillas y entre ejecuciones con ruido.
+
+7. Metodología resumida
+1) Obtención y preprocesamiento de datos financieros históricos.
+2) Definición formal del problema y transformación QUBO/Ising.
+3) Implementación de métodos clásicos y cuánticos en Python con Qiskit.
+4) Diseño de experimentos comparativos por tamaños de instancia.
+5) Análisis estadístico de resultados y discusión crítica de limitaciones.
+
+8. Viabilidad y recursos
+El trabajo es viable en un mes bajo el alcance definido, ya que se apoya principalmente en simuladores gratuitos y librerías open source. El uso de hardware cuántico real, sujeto a disponibilidad y colas, no condicionará el cumplimiento de los objetivos principales.
+
+9. Resultado esperado
+Se espera obtener evidencia experimental sólida sobre el estado actual de los enfoques cuánticos híbridos en este caso de uso financiero, identificando sus fortalezas, limitaciones y escenarios de uso realista frente a alternativas clásicas.
