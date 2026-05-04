@@ -42,7 +42,19 @@ En que condiciones un enfoque cuantico hibrido NISQ (QAOA, con VQE opcional) res
 - Variabilidad entre semillas y escenarios de ruido
 
 ## 7. Registro de decisiones (bitacora)
-Anotar aqui decisiones importantes con fecha y justificacion.
+- 2026-04-27: Bloque 1 completado. 25 tickers descargados de Yahoo Finance (2019-2024).
+  Pipeline reproducible creado en src/bloque1_datos.py.
+  Nota: yfinance 1.3.0 cambia formato MultiIndex a ('Price','Ticker'), corregido.
+  Los 25 activos pasaron la limpieza sin perdida de datos (0 NaN residuales).
+  Retornos logaritmicos calculados: 1007 dias train, 501 dias test.
+  Matriz de covarianzas 25x25 definida positiva confirmada.
+
+- 2026-04-27: Bloque 2 completado. Formulacion QUBO implementada (q=0.5, penalty=10x).
+  Busqueda exhaustiva y SA ejecutados para n=8,12,16.
+  SA alcanza 100% factibilidad en todas las instancias.
+  Gap medio SA: 0% (n=8), 2.39% (n=12), 7.53% (n=16) — crece con n como esperado.
+  SA encuentra optimo exacto en al menos 1 de 10 semillas para todos los tamanos.
+  Carteras optimas: AAPL+TSLA (n=8), AAPL+TSLA+PG (n=12), AAPL+NVDA+TSLA+UNH (n=16).
 
 ## 8. Registro de experimentos
 Formato sugerido por experimento:
@@ -55,7 +67,12 @@ Formato sugerido por experimento:
 - Observaciones:
 
 ## 9. Resultados consolidados
-Espacio para tablas y conclusiones parciales que luego pasaran a LaTeX.
+### Bloque 1 - Estadisticas destacadas (periodo train 2019-2022)
+- Mejor Sharpe: AAPL (+0.830), NVDA (+0.659), MSFT (+0.652)
+- Peor Sharpe: DIS (-0.211), META (-0.110), CRM (-0.064)
+- Rango retorno anual: -5.37% (DIS) a +44.66% (TSLA)
+- Rango volatilidad anual: 20.59% (JNJ) a 67.14% (TSLA)
+- Correlacion media off-diagonal: 0.4557
 
 ## 10. Riesgos y mitigaciones
 - Riesgo: dependencia de hardware real.

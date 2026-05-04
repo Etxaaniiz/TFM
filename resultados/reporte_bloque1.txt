@@ -1,0 +1,65 @@
+======================================================================
+REPORTE BLOQUE 1 — PREPARACIÓN DEL MARCO DE DATOS
+Generado: 2026-04-27 14:35:19
+======================================================================
+
+1. DATOS DESCARGADOS
+   Fuente: Yahoo Finance (precios de cierre ajustados)
+   Tickers: 25 activos
+   Periodo: 2019-01-02 a 2024-12-30
+   Días de trading: 1509
+
+2. LIMPIEZA
+   Filas originales: 1509
+   Filas tras limpieza: 1509
+   Tickers finales: 25
+   NaN residuales: 0
+
+3. RETORNOS
+   Tipo: logarítmicos
+   Observaciones totales: 1508
+   Periodo entrenamiento: 2019-01-03 a 2022-12-30 (1007 días)
+   Periodo test: 2023-01-03 a 2024-12-30 (501 días)
+
+4. PARÁMETROS DEL MODELO (anualizados, periodo train)
+   Retorno medio anual:
+     Mínimo:  -0.0537 (DIS)
+     Máximo:  0.4466 (TSLA)
+     Mediana: 0.1183
+   Volatilidad anual:
+     Mínima:  0.2059 (JNJ)
+     Máxima:  0.6714 (TSLA)
+     Mediana: 0.3219
+
+5. MATRIZ DE COVARIANZAS
+   Dimensión: 25x25
+   Definida positiva: True
+   Correlación media (off-diagonal): 0.4557
+
+6. TOP 5 ACTIVOS POR SHARPE RATIO (train)
+   AAPL    Ret= +30.70%  Vol= 34.59%  Sharpe=+0.830
+   NVDA    Ret= +36.63%  Vol= 52.59%  Sharpe=+0.659
+   MSFT    Ret= +22.68%  Vol= 31.74%  Sharpe=+0.652
+   TSLA    Ret= +44.66%  Vol= 67.14%  Sharpe=+0.635
+   UNH     Ret= +20.97%  Vol= 31.31%  Sharpe=+0.606
+
+7. BOTTOM 5 ACTIVOS POR SHARPE RATIO (train)
+   NFLX    Ret=  +2.42%  Vol= 49.87%  Sharpe=+0.008
+   AMZN    Ret=  +2.19%  Vol= 35.74%  Sharpe=+0.005
+   CRM     Ret=  -0.55%  Vol= 40.06%  Sharpe=-0.064
+   META    Ret=  -3.00%  Vol= 45.55%  Sharpe=-0.110
+   DIS     Ret=  -5.37%  Vol= 34.96%  Sharpe=-0.211
+
+8. ARCHIVOS GENERADOS
+   C:\Users\etxan\Documents\TFM\data\raw\precios_cierre.csv
+   C:\Users\etxan\Documents\TFM\data\processed\precios_cierre_limpio.csv
+   C:\Users\etxan\Documents\TFM\data\processed\retornos_diarios.csv
+   C:\Users\etxan\Documents\TFM\data\processed\retornos_train.csv
+   C:\Users\etxan\Documents\TFM\data\processed\retornos_test.csv
+   C:\Users\etxan\Documents\TFM\data\processed\matriz_covarianzas.csv
+   C:\Users\etxan\Documents\TFM\data\processed\media_retornos.csv
+   C:\Users\etxan\Documents\TFM\data\processed\estadisticas_descriptivas.csv
+
+======================================================================
+FIN DEL REPORTE BLOQUE 1
+======================================================================
