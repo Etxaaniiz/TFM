@@ -480,20 +480,19 @@ def main():
         sns.despine()
         plt.savefig(os.path.join(output_dir, "xy_vs_qaoa_feasibility.png"), bbox_inches='tight')
         plt.close()
-        
-    # ----------------------------------------------------
-    # Plot 10: Comparativa QAOA vs XY (Approximation Ratio vs p) -> comparison_qaoa_vs_xy.png
-    # ----------------------------------------------------
     df_quantum = df_filtered[df_filtered['solver'].isin(['qaoa', 'xy_qaoa'])].copy()
     if not df_quantum.empty:
+        # Map solver values to clean names for accurate, automatic legends
+        df_quantum['solver'] = df_quantum['solver'].map({'qaoa': 'QAOA Estándar', 'xy_qaoa': 'XY-QAOA'})
+        
         plt.figure(figsize=(7.5, 4.5))
         df_quantum_p = df_quantum.groupby(['p_int', 'solver'])['approximation_ratio'].mean().reset_index()
         df_quantum_p.sort_values(by='p_int', inplace=True)
         
-        palette_quant = {'qaoa': '#F97316', 'xy_qaoa': '#B22222'}
+        palette_quant = {'QAOA Estándar': '#F97316', 'XY-QAOA': '#B22222'}
         sns.lineplot(
             data=df_quantum_p, x='p_int', y='approximation_ratio', hue='solver', style='solver',
-            markers={'qaoa': 'o', 'xy_qaoa': 's'}, palette=palette_quant, linewidth=2, markersize=8, dashes=False
+            markers={'QAOA Estándar': 'o', 'XY-QAOA': 's'}, palette=palette_quant, linewidth=2, markersize=8, dashes=False
         )
         plt.axhline(1.0, color='black', linestyle='--', linewidth=1.0, alpha=0.7, label='Gurobi (Óptimo)')
         plt.title("Ratio de Aproximación vs. Profundidad del Circuito ($p$)", weight='bold')
@@ -502,8 +501,7 @@ def main():
         plt.xticks(sorted(df_quantum_p['p_int'].unique()))
         plt.ylim(0.0, 1.05)
         
-        # Rename legend labels
-        plt.legend(['Gurobi (Óptimo)', 'QAOA Estándar', 'XY-QAOA'], title="Algoritmo", frameon=True)
+        plt.legend(title="Algoritmo", frameon=True)
         sns.despine()
         plt.savefig(os.path.join(output_dir, "comparison_qaoa_vs_xy.png"), bbox_inches='tight')
         plt.close()
@@ -517,32 +515,32 @@ def main():
         df_gap_p.sort_values(by='p_int', inplace=True)
         sns.lineplot(
             data=df_gap_p, x='p_int', y='gap_pct', hue='solver', style='solver',
-            markers={'qaoa': 'o', 'xy_qaoa': 's'}, palette=palette_quant, linewidth=2, markersize=8, dashes=False
+            markers={'QAOA Estándar': 'o', 'XY-QAOA': 's'}, palette=palette_quant, linewidth=2, markersize=8, dashes=False
         )
         plt.axhline(0.0, color='black', linestyle='--', linewidth=1.0, alpha=0.7, label='Gurobi (Óptimo)')
         plt.title("Optimality GAP vs. Profundidad del Circuito ($p$)", weight='bold')
         plt.xlabel("Profundidad del Circuito ($p$)")
         plt.ylabel("GAP relativo respecto a Gurobi (%)")
         plt.xticks(sorted(df_gap_p['p_int'].unique()))
-        plt.legend(['Gurobi (Óptimo)', 'QAOA Estándar', 'XY-QAOA'], title="Algoritmo", frameon=True)
+        plt.legend(title="Algoritmo", frameon=True)
         sns.despine()
         plt.savefig(os.path.join(output_dir, "gap_vs_p.png"), bbox_inches='tight')
         plt.close()
-
+ 
         # Tiempo vs p
         plt.figure(figsize=(7.5, 4.5))
         df_time_p = df_quantum.groupby(['p_int', 'solver'])['runtime_seconds'].mean().reset_index()
         df_time_p.sort_values(by='p_int', inplace=True)
         sns.lineplot(
             data=df_time_p, x='p_int', y='runtime_seconds', hue='solver', style='solver',
-            markers={'qaoa': 'o', 'xy_qaoa': 's'}, palette=palette_quant, linewidth=2, markersize=8, dashes=False
+            markers={'QAOA Estándar': 'o', 'XY-QAOA': 's'}, palette=palette_quant, linewidth=2, markersize=8, dashes=False
         )
         plt.yscale('log')
         plt.title("Tiempo de Simulación vs. Profundidad del Circuito ($p$)", weight='bold')
         plt.xlabel("Profundidad del Circuito ($p$)")
         plt.ylabel("Tiempo de Simulación (segundos) - Escala Log")
         plt.xticks(sorted(df_time_p['p_int'].unique()))
-        plt.legend(['QAOA Estándar', 'XY-QAOA'], title="Algoritmo", frameon=True)
+        plt.legend(title="Algoritmo", frameon=True)
         sns.despine()
         plt.savefig(os.path.join(output_dir, "tiempo_vs_p.png"), bbox_inches='tight')
         plt.close()
