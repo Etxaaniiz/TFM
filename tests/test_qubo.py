@@ -46,6 +46,6 @@ def test_build_qubo_penalty_impact():
     assert np.isclose(Q2[0, 0] - Q1[0, 0], -27.0)
     
     # Off-diagonals should differ
-    # Q_ij = Q0_ij + P / 2.0
-    # Diff on off-diagonal should be 9.0 / 2.0 = 4.5
-    assert np.isclose(Q2[0, 1] - Q1[0, 1], 4.5)
+    # Q_ij = Q0_ij + P (since both Q_ij and Q_ji are incremented by P)
+    # Diff on off-diagonal should be 9.0
+    assert np.isclose(Q2[0, 1] - Q1[0, 1], 9.0)

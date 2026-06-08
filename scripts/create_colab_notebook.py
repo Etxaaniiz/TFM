@@ -44,6 +44,8 @@ def main():
                 "source": [
                     "# Instalar dependencias necesarias desde el archivo requirements.txt\n",
                     "# Nota: Colab Pro ya cuenta con muchas librerías, pero instalaremos las de computación cuántica y optimización\n",
+                    "# Actualizamos jax[cuda12] para garantizar compatibilidad con la GPU de Colab y luego instalamos el resto\n",
+                    "!pip install -U \"jax[cuda12]\"\n",
                     "!pip install -r requirements.txt"
                 ]
             },

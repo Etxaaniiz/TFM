@@ -85,6 +85,10 @@ def solve_gurobi(instance: Dict[str, Any], lambda_val: float = 0.5) -> Dict[str,
     metrics = calculate_portfolio_metrics(x_sol, mu, Sigma, K, lambda_val)
     energy = calculate_qubo_energy(x_sol, instance['Q']) + instance.get('offset', 0.0)
     
+    tickers_list = instance.get('tickers', [])
+    selected_tickers = ",".join([tickers_list[i] for i in range(N) if x_sol[i] == 1]) if tickers_list else ""
+    num_selected = int(np.sum(x_sol))
+    
     results = {
         "dataset": instance['dataset'],
         "solver": "gurobi",
@@ -102,6 +106,8 @@ def solve_gurobi(instance: Dict[str, Any], lambda_val: float = 0.5) -> Dict[str,
         "feasible": metrics['feasible'],
         "runtime_seconds": runtime,
         "memory_mb": mem_used,
+        "selected_tickers": selected_tickers,
+        "num_selected": num_selected,
         "solution": x_sol
     }
     
@@ -152,6 +158,10 @@ def solve_exact(instance: Dict[str, Any]) -> Dict[str, Any]:
     metrics = calculate_portfolio_metrics(x_sol, mu, Sigma, K, lambda_val)
     energy = calculate_qubo_energy(x_sol, Q) + offset
     
+    tickers_list = instance.get('tickers', [])
+    selected_tickers = ",".join([tickers_list[i] for i in range(N) if x_sol[i] == 1]) if tickers_list else ""
+    num_selected = int(np.sum(x_sol))
+    
     results = {
         "dataset": instance['dataset'],
         "solver": "exact",
@@ -169,6 +179,8 @@ def solve_exact(instance: Dict[str, Any]) -> Dict[str, Any]:
         "feasible": metrics['feasible'],
         "runtime_seconds": runtime,
         "memory_mb": mem_used,
+        "selected_tickers": selected_tickers,
+        "num_selected": num_selected,
         "solution": x_sol
     }
     
@@ -220,6 +232,10 @@ def solve_sa(instance: Dict[str, Any], num_reads: int = 1000, num_sweeps: int = 
     metrics = calculate_portfolio_metrics(x_sol, mu, Sigma, K, lambda_val)
     energy = calculate_qubo_energy(x_sol, Q) + offset
     
+    tickers_list = instance.get('tickers', [])
+    selected_tickers = ",".join([tickers_list[i] for i in range(N) if x_sol[i] == 1]) if tickers_list else ""
+    num_selected = int(np.sum(x_sol))
+    
     results = {
         "dataset": instance['dataset'],
         "solver": "simulated_annealing",
@@ -237,6 +253,8 @@ def solve_sa(instance: Dict[str, Any], num_reads: int = 1000, num_sweeps: int = 
         "feasible": metrics['feasible'],
         "runtime_seconds": runtime,
         "memory_mb": mem_used,
+        "selected_tickers": selected_tickers,
+        "num_selected": num_selected,
         "solution": x_sol
     }
     

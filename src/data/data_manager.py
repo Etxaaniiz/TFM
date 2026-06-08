@@ -20,23 +20,36 @@ def download_data(tickers: List[str], start: str, end: str) -> pd.DataFrame:
         raise ValueError("The tickers list cannot be empty.")
         
     print(f"Downloading data for {len(tickers)} tickers from {start} to {end}...")
-    # yfinance download
-    data = yf.download(tickers, start=start, end=end, group_by='ticker', progress=False)
+    # yfinance download - explicitly disable auto_adjust to ensure Adj Close is returned
+    data = yf.download(tickers, start=start, end=end, group_by='ticker', auto_adjust=False, progress=False)
     
     # Extract Adjusted Close
     prices = pd.DataFrame()
     for ticker in tickers:
-        if ticker in data.columns.levels[0] if isinstance(data.columns, pd.MultiIndex) else [ticker]:
-            try:
-                # If MultiIndex columns
-                if isinstance(data.columns, pd.MultiIndex):
-                    prices[ticker] = data[ticker]['Adj Close']
+        if isinstance(data.columns, pd.MultiIndex):
+            # Check if ticker is in the columns
+            if ticker in data.columns.levels[0]:
+                ticker_data = data[ticker]
+                if 'Adj Close' in ticker_data.columns:
+                    prices[ticker] = ticker_data['Adj Close']
+                elif 'Close' in ticker_data.columns:
+                    prices[ticker] = ticker_data['Close']
                 else:
-                    prices[ticker] = data['Adj Close']
-            except KeyError:
-                print(f"Warning: Adj Close data not found for ticker {ticker}.")
+                    print(f"Warning: Neither 'Adj Close' nor 'Close' found for ticker {ticker}.")
+        else:
+            # Single ticker case
+            if 'Adj Close' in data.columns:
+                prices[ticker] = data['Adj Close']
+            elif 'Close' in data.columns:
+                prices[ticker] = data['Close']
+            else:
+                print(f"Warning: Neither 'Adj Close' nor 'Close' found for ticker {ticker}.")
                 
-    # Remove assets containing NaN values
+    # Fill missing values using forward-fill then backward-fill
+    # This handles calendar mismatches (e.g. US holidays vs Spanish holidays)
+    prices = prices.ffill().bfill()
+    
+    # Remove assets containing NaN values (only if they are completely empty)
     initial_count = len(prices.columns)
     prices = prices.dropna(axis=1, how='any')
     final_count = len(prices.columns)

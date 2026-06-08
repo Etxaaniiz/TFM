@@ -4,6 +4,7 @@ import yaml
 import psutil
 import pickle
 import numpy as np
+import pandas as pd
 from typing import Dict, Any, Union
 
 def get_memory_usage() -> float:

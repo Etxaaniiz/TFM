@@ -12,17 +12,17 @@ solvers:
     num_reads: 1000
     num_sweeps: 1000
   qaoa:
-    p: [1, 2, 3, 4]
+    p: [1, 2, 3]
     maxiter: 100
     shots: 1024
     optimizer: "COBYLA"
   xy_qaoa:
-    p: [1, 2, 3, 4]
+    p: [1, 2, 3]
     maxiter: 100
     shots: 1024
     optimizer: "COBYLA"
   jasp_qaoa:
-    p: [2, 3, 4]
+    p: [2, 3]
     maxiter: 100
     shots: 1024
     optimizer: "COBYLA"

@@ -1,0 +1,15 @@
+\begin{table}[htbp]
+  \centering
+  \caption{Resultados de escalabilidad para carteras grandes (N >= 18)}
+  \label{tab:escalabilidad}
+  \begin{tabular}{ccccccc}
+    \toprule
+    N & K & Solver & Objetivo Promedio & Gap Promedio Pct & Factibilidad Pct & Tiempo Seg \\
+    \midrule
+    18 & 4 & gurobi & -0.1334 & 0.0000 & 100.0000 & 0.0096 \\
+    18 & 4 & simulated\_annealing & -0.1308 & 1.9892 & 100.0000 & 0.5997 \\
+    20 & 5 & gurobi & -0.1265 & 0.0000 & 100.0000 & 0.0112 \\
+    20 & 5 & simulated\_annealing & -0.1248 & 1.4170 & 100.0000 & 0.6965 \\
+    \bottomrule
+  \end{tabular}
+\end{table}

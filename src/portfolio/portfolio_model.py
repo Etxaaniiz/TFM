@@ -61,8 +61,8 @@ def build_qubo(
     for i in range(N):
         Q[i, i] += P * (1.0 - 2.0 * K)
         for j in range(i + 1, N):
-            Q[i, j] += P / 2.0
-            Q[j, i] += P / 2.0
+            Q[i, j] += P
+            Q[j, i] += P
             
     return Q
 
