@@ -16,6 +16,7 @@ from qrisp.qaoa import (
 from qrisp.jasp import jaspify
 from src.utils.utils import get_memory_usage
 from src.metrics.metrics import calculate_portfolio_metrics, calculate_qubo_energy
+from src.quantum.regularized_qaoa import RegularizedQAOAProblem
 
 def solve_qaoa(
     instance: Dict[str, Any], 
@@ -102,7 +103,8 @@ def solve_qaoa(
         "memory_mb": mem_used,
         "selected_tickers": selected_tickers,
         "num_selected": num_selected,
-        "solution": x_sol
+        "solution": x_sol,
+        "counts": results_dict
     }
     
     return results
@@ -199,7 +201,8 @@ def solve_xy(
         "memory_mb": mem_used,
         "selected_tickers": selected_tickers,
         "num_selected": num_selected,
-        "solution": x_sol
+        "solution": x_sol,
+        "counts": results_dict
     }
     
     return results
@@ -328,6 +331,108 @@ def solve_jasp(
         "selected_tickers": selected_tickers,
         "num_selected": num_selected,
         "solution": x_sol
+    }
+    
+    return results
+
+def solve_xy_regularized(
+    instance: Dict[str, Any], 
+    p: int = 2, 
+    maxiter: int = 100, 
+    shots: int = 1024,
+    alpha: float = 0.1
+) -> Dict[str, Any]:
+    """
+    Solves the QUBO formulation using XY-QAOA with TQA initialization and Ridge regularization.
+    
+    Parameters:
+    instance (dict): Problem instance containing N, K, mu, Sigma, Q, lambda_val.
+    p (int): QAOA depth/steps (default: 2).
+    maxiter (int): Maximum optimization iterations (default: 100).
+    shots (int): Number of measurement shots (default: 1024).
+    alpha (float): Ridge regularization parameter (default: 0.1).
+    
+    Returns:
+    dict: Solver results including portfolio metrics and runtime.
+    """
+    N = instance['N']
+    K = instance['K']
+    mu = instance['mu']
+    Sigma = instance['Sigma']
+    Q = instance['Q']
+    lambda_val = instance.get('lambda_val', 0.5)
+    offset = instance.get('offset', 0.0)
+    
+    mem_before = get_memory_usage()
+    start_time = time.perf_counter()
+    
+    # 1. Setup QuantumVariable
+    qv = QuantumVariable(N)
+    
+    # 2. Define Dicke state initialization function
+    def init_dicke(q_var):
+        from qrisp import x
+        for i in range(K):
+            x(q_var[i])
+        dicke_state(q_var, K)
+        
+    # 3. Instantiate Regularized XY-QAOA Problem
+    xy_qaoa_prob = RegularizedQAOAProblem(
+        cost_operator=create_QUBO_cost_operator(Q),
+        mixer=XY_mixer,
+        cl_cost_function=create_QUBO_cl_cost_function(Q),
+        init_function=init_dicke,
+        alpha=alpha
+    )
+    
+    # 4. Run optimization using TQA initialization
+    results_dict = xy_qaoa_prob.run(
+        qarg=qv,
+        depth=p,
+        max_iter=maxiter,
+        init_type="tqa",
+        mes_kwargs={"shots": shots}
+    )
+    
+    end_time = time.perf_counter()
+    mem_after = get_memory_usage()
+    
+    # 5. Extract solution
+    best_bitstring = max(results_dict, key=results_dict.get)
+    x_sol = np.array([int(bit) for bit in best_bitstring])
+    
+    runtime = end_time - start_time
+    mem_used = mem_after
+    
+    # 6. Compute metrics
+    metrics = calculate_portfolio_metrics(x_sol, mu, Sigma, K, lambda_val)
+    energy = calculate_qubo_energy(x_sol, Q) + offset
+    
+    tickers_list = instance.get('tickers', [])
+    selected_tickers = ",".join([tickers_list[i] for i in range(N) if x_sol[i] == 1]) if tickers_list else ""
+    num_selected = int(np.sum(x_sol))
+    
+    results = {
+        "dataset": instance['dataset'],
+        "solver": "xy_qaoa_regularized",
+        "N": N,
+        "K": K,
+        "instance_id": instance['instance_id'],
+        "seed": instance['seed'],
+        "p": p,
+        "objective": metrics['objective'],
+        "energy": energy,
+        "gap": 0.0,
+        "sharpe": metrics['sharpe'],
+        "expected_return": metrics['expected_return'],
+        "volatility": metrics['volatility'],
+        "feasible": metrics['feasible'],
+        "runtime_seconds": runtime,
+        "memory_mb": mem_used,
+        "selected_tickers": selected_tickers,
+        "num_selected": num_selected,
+        "solution": x_sol,
+        "counts": results_dict
     }
     
     return results

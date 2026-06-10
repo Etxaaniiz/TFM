@@ -1,0 +1,76 @@
+data:
+  start_date: "2018-01-01"
+  end_date: "2024-12-31"
+  raw_path: "data/raw/prices.csv"
+  processed_path: "data/processed/"
+
+portfolio:
+  lambda_val: 0.5
+
+stress_test:
+  regimes:
+    stable:
+      name: "Estable"
+      train_start: "2018-01-01"
+      train_end: "2019-06-30"
+      test_start: "2019-07-01"
+      test_end: "2019-12-31"
+    volatile:
+      name: "Volatil"
+      train_start: "2018-07-01"
+      train_end: "2020-06-30"
+      test_start: "2020-07-01"
+      test_end: "2020-12-31"
+    inflationary:
+      name: "Inflacionario"
+      train_start: "2021-01-01"
+      train_end: "2022-12-31"
+      test_start: "2023-01-01"
+      test_end: "2023-06-30"
+
+  problem_sizes:
+    N_list: [10, 25, 40]
+    K_map:
+      10: [2, 3]
+      25: [3, 5]
+      40: [3, 6]
+
+  tickers: [
+    # US Tech (10)
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA', 'AVGO', 'CSCO', 'ADBE',
+    # US traditional/financial (10)
+    'JPM', 'V', 'MA', 'PG', 'KO', 'PEP', 'JNJ', 'WMT', 'DIS', 'PFE',
+    # IBEX 35 (10)
+    'SAN.MC', 'BBVA.MC', 'TEF.MC', 'ITX.MC', 'REP.MC', 'IBE.MC', 'CABK.MC', 'SAB.MC', 'ACS.MC', 'FER.MC',
+    # US Others (10)
+    'NFLX', 'INTC', 'AMD', 'QCOM', 'TXN', 'HON', 'AMGN', 'SBUX', 'MDLZ', 'GILD'
+  ]
+  
+  transaction_costs:
+    institutional: 0.0005
+    retail: 0.0025
+
+solvers:
+  sa:
+    num_reads: 1000
+    num_sweeps: 1000
+  qaoa:
+    p_list: [1, 2, 4]
+    maxiter: 100
+    shots: 1024
+    optimizer: "COBYLA"
+  xy_qaoa:
+    p_list: [1, 2, 4]
+    maxiter: 100
+    shots: 1024
+    optimizer: "COBYLA"
+  xy_qaoa_regularized:
+    p: 2
+    alpha_list: [0.01, 0.05, 0.1, 0.25]
+    maxiter: 100
+    shots: 1024
+    optimizer: "COBYLA"
+
+experiments:
+  seeds: [42, 43, 44, 45, 46]
+  timeout_seconds: 600

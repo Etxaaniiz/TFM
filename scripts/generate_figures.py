@@ -1,12 +1,19 @@
 import os
 import sys
+
+# Resolve project root relative to script directory and change working directory
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, ".."))
+os.chdir(project_root)
+sys.path.append(project_root)
+
+# Force JAX to use CPU only to bypass incompatible PJRT CUDA plugins in Colab
+os.environ["JAX_PLATFORMS"] = "cpu"
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-# Add src to Python path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 def setup_style():
     """

@@ -60,7 +60,11 @@ def df_to_clean_latex(df: pd.DataFrame, filepath: str, caption: str = "", label:
 def main():
     csv_path = "results/results.csv"
     if not os.path.exists(csv_path):
-        print(f"Error: Results file not found at {csv_path}. Please run experiments first.")
+        csv_path = "output/results/results.csv"
+    if not os.path.exists(csv_path):
+        csv_path = "Version2/output/results/results.csv"
+    if not os.path.exists(csv_path):
+        print(f"Error: Results file not found at results/results.csv or output/results/results.csv. Please run experiments first.")
         sys.exit(1)
         
     df = pd.read_csv(csv_path)

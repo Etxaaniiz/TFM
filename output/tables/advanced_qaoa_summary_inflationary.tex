@@ -1,0 +1,26 @@
+\begin{table}[h!]
+\centering
+\caption{Comparación de Desempeño Cuántico y Clásico en el Régimen Inflacionario ($N \in \{10, 15, 20\}$)}
+\label{tab:advanced_qaoa_inflationary}
+\begin{tabular}{llcccc}
+\hline
+\textbf{N} & \textbf{Solucionador} & \textbf{In-Sample Gap} & \textbf{Sharpe Neto (OOS)} & \textbf{Iteraciones} & \textbf{Tiempo (s)} \\
+\hline
+10 & Gurobi (Exacto) & 0.00\% & 0.2319 \pm 0.2925 & 1 & 0.030 \\
+ & Simulated Annealing & 0.00\% & 0.2319 \pm 0.2925 & 1000 & 0.290 \\
+ & XY-QAOA Normal & 91.08\% \pm 75.02\% & 1.2024 \pm 1.3899 & 50 & 17.343 \\
+ & XY-QAOA Reg (α=0.05) & 91.08\% \pm 75.02\% & 1.2024 \pm 1.3899 & 48 & 17.720 \\
+ & XY-QAOA Reg (α=0.1) & 91.08\% \pm 75.02\% & 1.2024 \pm 1.3899 & 47 & 16.803 \\
+15 & Gurobi (Exacto) & 0.00\% & -0.0513 \pm 0.1792 & 1 & 0.016 \\
+ & Simulated Annealing & 1.27\% \pm 2.19\% & -0.2142 \pm 0.2417 & 1000 & 0.459 \\
+ & XY-QAOA Normal & 76.76\% \pm 14.83\% & 1.4398 \pm 0.4040 & 52 & 41.608 \\
+ & XY-QAOA Reg (α=0.05) & 129.65\% \pm 76.73\% & 1.7519 \pm 1.1742 & 53 & 41.845 \\
+ & XY-QAOA Reg (α=0.1) & 75.53\% \pm 12.50\% & 1.4266 \pm 0.3478 & 47 & 38.540 \\
+20 & Gurobi (Exacto) & 0.00\% & -0.3155 \pm 0.0852 & 1 & 0.033 \\
+ & Simulated Annealing & 4.06\% \pm 3.79\% & -0.0244 \pm 0.2772 & 1000 & 0.630 \\
+ & XY-QAOA Normal & 79.82\% \pm 20.76\% & 1.7869 \pm 0.5056 & 53 & 86.456 \\
+ & XY-QAOA Reg (α=0.05) & 87.34\% \pm 8.88\% & 1.5289 \pm 0.6720 & 47 & 77.582 \\
+ & XY-QAOA Reg (α=0.1) & 88.42\% \pm 7.50\% & 1.7261 \pm 0.5155 & 47 & 75.601 \\
+\hline
+\end{tabular}
+\end{table}

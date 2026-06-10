@@ -7,7 +7,7 @@ import pytest
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.portfolio.portfolio_model import build_qubo
-from src.quantum.quantum_solvers import solve_qaoa, solve_xy, solve_jasp
+from src.quantum.quantum_solvers import solve_qaoa, solve_xy, solve_jasp, solve_xy_regularized
 
 def test_quantum_solvers_execution():
     # Tiny portfolio problem: N=3, K=1
@@ -55,3 +55,10 @@ def test_quantum_solvers_execution():
     assert res_jasp["solver"] == "jasp_qaoa"
     assert res_jasp["N"] == 3
     assert len(res_jasp["solution"]) == 3
+
+    # 4. Test Regularized XY-QAOA (p=2, maxiter=2, shots=100, alpha=0.1)
+    res_reg = solve_xy_regularized(instance, p=2, maxiter=2, shots=100, alpha=0.1)
+    assert res_reg["solver"] == "xy_qaoa_regularized"
+    assert res_reg["N"] == 3
+    assert len(res_reg["solution"]) == 3
+    assert np.isclose(np.sum(res_reg["solution"]), K)

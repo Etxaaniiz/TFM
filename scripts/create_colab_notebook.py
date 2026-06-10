@@ -13,7 +13,7 @@ def main():
                     "Este cuaderno automatiza por completo la preparación, ejecución y análisis de los experimentos para el Trabajo de Fin de Máster (TFM).\n",
                     "\n",
                     "### Instrucciones de uso:\n",
-                    "1. Configura el entorno de Google Colab Pro para usar una GPU (opcional, recomendado para acelerar JaspQAOA: *Entorno de ejecución* -> *Cambiar tipo de entorno de ejecución* -> *T4 GPU* o superior).\n",
+                    "1. Configura el entorno de Google Colab (ejecución estándar en CPU).\n",
                     "2. Ejecuta cada celda secuencialmente.\n",
                     "3. Una vez finalizado, los resultados se copiarán automáticamente a tu Google Drive para garantizar persistencia total."
                 ]
@@ -42,10 +42,33 @@ def main():
                 "metadata": {},
                 "outputs": [],
                 "source": [
+                    "# Detectar la carpeta del proyecto y cambiar de directorio de trabajo\n",
+                    "import os\n",
+                    "target_dir = None\n",
+                    "if os.path.exists('/content/TFM_final'):\n",
+                    "    target_dir = '/content/TFM_final'\n",
+                    "elif os.path.exists('TFM_final'):\n",
+                    "    target_dir = 'TFM_final'\n",
+                    "else:\n",
+                    "    for root, dirs, files in os.walk('/content'):\n",
+                    "        if 'requirements.txt' in files and '.git' not in root:\n",
+                    "            target_dir = root\n",
+                    "            break\n",
+                    "if target_dir:\n",
+                    "    print(f'🎯 Carpeta del proyecto encontrada en: {target_dir}')\n",
+                    "    %cd {target_dir}\n",
+                    "else:\n",
+                    "    print('❌ Advertencia: No se encontró el proyecto, el directorio actual es:', os.getcwd())\n"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": [
                     "# Instalar dependencias necesarias desde el archivo requirements.txt\n",
                     "# Nota: Colab Pro ya cuenta con muchas librerías, pero instalaremos las de computación cuántica y optimización\n",
-                    "# Actualizamos jax[cuda12] para garantizar compatibilidad con la GPU de Colab y luego instalamos el resto\n",
-                    "!pip install -U \"jax[cuda12]\"\n",
                     "!pip install -r requirements.txt"
                 ]
             },
@@ -141,20 +164,57 @@ def main():
                 ]
             },
             {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "## 5. Análisis Detallado del QAOA XY Regularizado (Fase 3: Barridos de Alpha y Profundidad)\n",
+                    "\n",
+                    "Esta sección ejecuta el benchmark científico detallado para comparar el QAOA XY regularizado contra el normal y Gurobi. Analiza la convergencia clásica (mitigación de Barren Plateaus) y el impacto del dial de regularización alpha (alivio del overfitting)."
+                ]
+            },
+            {
                 "cell_type": "code",
                 "execution_count": None,
                 "metadata": {},
                 "outputs": [],
                 "source": [
-                    "# 6. JaspQAOA (JIT con JAX y Terminal Sampling)\n",
-                    "!python scripts/run_jasp.py"
+                    "# Ejecutar el benchmark científico detallado\n",
+                    "!python scripts/run_regularized_qaoa_benchmark.py"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "# Graficar los resultados analíticos del benchmark\n",
+                    "!python scripts/plot_regularized_qaoa_benchmark.py"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "# Mostrar las gráficas analíticas generadas\n",
+                    "from IPython.display import Image, display\n",
+                    "print('--- Grafico 1: Impacto del Coeficiente Alpha en In-Sample vs Out-of-Sample ---')\n",
+                    "display(Image(filename='figures/qaoa_analysis_alpha_impact.png'))\n",
+                    "print('\\n--- Grafico 2: Evolución de Convergencia del Optimizador Clásico (Barren Plateaus) ---')\n",
+                    "display(Image(filename='figures/qaoa_analysis_convergence.png'))\n",
+                    "print('\\n--- Grafico 3: Impacto de la Profundidad p en el Optimization Gap ---')\n",
+                    "display(Image(filename='figures/qaoa_analysis_depth_gap.png'))"
                 ]
             },
             {
                 "cell_type": "markdown",
                 "metadata": {},
                 "source": [
-                    "## 5. Análisis de Resultados y Generación de Gráficos/Tablas"
+                    "## 5.5 Benchmark Avanzado: Escalabilidad, Estrés y Eficiencia Temporal\n",
+                    "\n",
+                    "Esta sección ejecuta el benchmark científico avanzado que evalúa la escalabilidad con N (10, 15, 20 activos), el impacto de los 3 regímenes de estrés (Estable, Volátil, Inflacionario) y la eficiencia clásica (número de iteraciones de COBYLA)."
                 ]
             },
             {
@@ -163,7 +223,50 @@ def main():
                 "metadata": {},
                 "outputs": [],
                 "source": [
-                    "# Generar figuras de resultados (PNG)\n",
+                    "# Ejecutar el benchmark avanzado\n",
+                    "!python scripts/run_advanced_qaoa_benchmark.py"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "# Graficar los resultados del benchmark avanzado\n",
+                    "!python scripts/plot_advanced_qaoa_benchmark.py"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "# Mostrar las gráficas analíticas avanzadas generadas\n",
+                    "from IPython.display import Image, display\n",
+                    "print('--- Grafico 1: Escalabilidad del Gap In-Sample por Régimen ---')\n",
+                    "display(Image(filename='figures/qaoa_advanced_gap_scaling.png'))\n",
+                    "print('\\n--- Grafico 2: Eficiencia Clásica (Iteraciones COBYLA) ---')\n",
+                    "display(Image(filename='figures/qaoa_advanced_iterations.png'))\n",
+                    "print('\\n--- Grafico 3: Escalabilidad del Sharpe Ratio por Régimen ---')\n",
+                    "display(Image(filename='figures/qaoa_advanced_sharpe_scaling.png'))"
+                ]
+            },
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "## 6. Análisis de Resultados Generales y Generación de Gráficos/Tablas"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "# Generar figuras de resultados generales (PNG)\n",
                     "!python scripts/generate_figures.py"
                 ]
             },
@@ -173,8 +276,18 @@ def main():
                 "metadata": {},
                 "outputs": [],
                 "source": [
-                    "# Generar tablas de resultados (LaTeX en formato .tex)\n",
+                    "# Generar tablas de resultados generales (LaTeX en formato .tex)\n",
                     "!python scripts/generate_tables.py"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "# Generar tablas de resultados avanzados de regularización (LaTeX en formato .tex)\n",
+                    "!python scripts/generate_advanced_qaoa_tables.py"
                 ]
             },
             {
