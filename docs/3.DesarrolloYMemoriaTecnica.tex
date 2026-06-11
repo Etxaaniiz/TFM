@@ -1,0 +1,268 @@
+\chapter{Desarrollo de los Modelos de Optimización y Memoria Técnica}
+\label{ch:desarrollo_modelos_memoria_tecnica}
+
+\section{Marco Experimental y Selección de Datos Financieros}
+\label{sec:marco_experimental_datos}
+
+\subsection{Origen de Datos e Ingeniería de Características Financieras}
+Para evaluar la capacidad de convergencia y robustez de los algoritmos clásicos y cuánticos desarrollados, la infraestructura de datos se ha diseñado para ingerir de forma automatizada las series temporales de precios de cierre ajustados (\textit{Adjusted Close}) procedentes de la plataforma Yahoo Finance \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md, uploaded:3.DesarrolloYMemoriaTecnica.md}. El universo de activos candidatos se ha seleccionado a partir de tres índices bursátiles que reflejan dinámicas de volatilidad y liquidez diferenciadas: el S\&P 500, el NASDAQ 100 y el IBEX 35 \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. El horizonte temporal analizado abarca de forma continua desde el 1 de enero de 2019 hasta el 31 de diciembre de 2024 \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}.
+
+El preprocesamiento de las series elementales se ejecuta de forma secuencial en el módulo \texttt{src/data/data\_manager.py} \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. Tras descargar los vectores de precios, se aplica un filtro de calidad de datos que elimina de manera estricta cualquier activo que presente valores no numéricos (\textit{NaN}) o discontinuidades prolongadas en su cotización \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. Posteriormente, se transforman las series continuas en rendimientos logarítmicos diarios mediante la siguiente expresión:
+\begin{equation}
+    R_{i,t} = \ln\left( \frac{P_{i,t}}{P_{i,t-1}} \right)
+\end{equation}
+Donde $P_{i,t}$ representa el precio ajustado del activo $i$ en el instante $t$ \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. A partir de estos rendimientos, se deducen el vector de rentabilidades medias anualizadas $\mu \in \mathbb{R}^N$ y la matriz de covarianzas anualizadas $\Sigma \in \mathbb{R}^{N \times N}$, asumiendo un estándar de $252$ días hábiles de negociación por año macroeconómico \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}.
+
+\subsection{Segmentación en Regímenes Macroeconómicos}
+Con el propósito de someter los algoritmos a condiciones de estrés de mercado y evaluar su generalización, el histórico de datos se ha segmentado analíticamente en tres regímenes macroeconómicos definidos por sus propiedades estadísticas de retorno y riesgo \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}:
+\begin{enumerate}
+    \item \textbf{Régimen Alcista de Baja Volatilidad (Bull Market):} Caracterizado por tendencias persistentemente positivas en los rendimientos medios y una contracción en la varianza de los activos \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}.
+    \item \textbf{Régimen Bajista de Alta Volatilidad (Bear Market / Crisis):} Definido por retornos esperados negativos y un ensanchamiento severo en los elementos de la diagonal de la matriz de covarianza, emulando periodos de corrección de mercado sistémica \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}.
+    \item \textbf{Régimen Lateral o Estacionario (Sideways Market):} Periodo de transición caracterizado por retornos medios próximos a cero y volatilidades estables, donde la selección de activos exige una sintonización fina del paisaje de optimización \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}.
+\end{enumerate}
+
+La distribución empírica de estas ventanas de mercado y el comportamiento dinámico de los retornos históricos se ilustran detalladamente en la Figura \ref{fig:distribucion_regimenes}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{output/figures/grafico_1_1_distribucion_regimenes.png}
+    \caption{Segmentación analítica del horizonte temporal histórico (2019--2024) en tres regímenes macroeconómicos diferenciados basados en la evolución de los índices S\&P 500, NASDAQ 100 e IBEX 35.}
+    \label{fig:distribucion_regimenes}
+\end{figure}
+
+\subsection{Formulación Clásica de Media-Varianza de Markowitz}
+El marco teórico subyacente para la asignación de activos se fundamenta en la optimización de media-varianza de Markowitz \cite{Markowitz1952}. En el contexto de este TFM, se modela un escenario condicionado caracterizado por carteras equiponderadas y límites estrictos de cardinalidad \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. Sea $x \in \{0, 1\}^N$ un vector de decisión binario donde $x_i = 1$ denota la inclusión del activo $i$ en la cartera y $x_i = 0$ su exclusión \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. Bajo la condición de equiponderación, el vector de pesos reales de inversión $w \in \mathbb{R}^N$ queda unívocamente acoplado al vector binario a través del parámetro de cardinalidad exacta $K$, definido como el número estricto de activos permitidos en la cartera ($K = \sum x_i$) \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. 
+
+Sustituyendo esta condición estructural, el rendimiento esperado de la cartera $\mu_p$ y la varianza de la cartera $\sigma_p^2$ se reformulan estrictamente en función de las variables de decisión binarias del problema \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}:
+\begin{equation}
+    \mu_p = w^T \mu = \frac{1}{K} \sum_{i=1}^{N} x_i \mu_i
+\end{equation}
+\begin{equation}
+    \sigma_p^2 = w^T \Sigma w = \frac{1}{K^2} \sum_{i=1}^{N} \sum_{j=1}^{N} x_i x_j \sigma_{ij}
+\end{equation}
+Donde $\sigma_{ij}$ representa el término de covarianza analítica entre los activos $i$ y $j$ \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. El problema general de optimización multiobjetivo se unifica mediante un parámetro de aversión al riesgo $\lambda \in [0, 1]$, cuya configuración inicial de compromiso se fija en $\lambda = 0.5$ \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. De este modo, la formulación clásica del problema de optimización cuadrática entera binaria condicionado se define formalmente como \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}:
+\begin{align}
+    \min_{x} \quad & f(x) = \lambda \left( \frac{1}{K^2} \sum_{i=1}^N \sum_{j=1}^N x_i x_j \sigma_{ij} \right) - (1-\lambda) \left( \frac{1}{K} \sum_{i=1}^N x_i \mu_i \right) \\
+    \text{s.t.} \quad & \sum_{i=1}^N x_i = K, \quad x_i \in \{0, 1\} \nonumber
+\end{align}
+
+\section{Mapeo Algebraico: De Markowitz a QUBO e Ising}
+\label{sec:mapeo_algebraico_qubo_ising}
+
+\subsection{Construcción de la Matriz QUBO ($Q$)}
+Para habilitar el procesamiento del problema mediante algoritmos de computación cuántica basados en el paradigma variacional o en el recocido adiabático, es mandatorio eliminar las restricciones explícitas del dominio transformando la formulación matemática en una estructura QUBO (Quadratic Unconstrained Binary Optimization) \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md, uploaded:2.ObjetivosAlcanceYAntecedentes.md}. Esto se logra inyectando la restricción de cardinalidad de igualdad dura directamente en la función objetivo en forma de un término de penalización cuadrática estricta de tipo polinómico \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md, uploaded:2.ObjetivosAlcanceYAntecedentes.md}:
+\begin{equation}
+    P(x) = A \left( \sum_{i=1}^N x_i - K \right)^2 = A \left( \sum_{i=1}^N \sum_{j=1}^N x_i x_j - 2K \sum_{i=1}^N x_i + K^2 \right)
+\end{equation}
+Donde $A \in \mathbb{R}^+$ denota el multiplicador de Lagrange o parámetro de penalización matemática \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. Para asegurar que cualquier estado cuántico no factible posea una energía estrictamente superior al estado óptimo global, se implementa un esquema de penalización dinámico y adaptativo autocalibrado a partir de la magnitud de los coeficientes de la función de coste financiero, definiéndose el límite inferior del penalizador como \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}:
+\begin{equation}
+    A = 10 \times \max_{i,j} |Q_{ij}^{base}|
+\end{equation}
+
+Agrupando analíticamente los coeficientes cuadráticos y lineales bajo la identidad booleana $x_i^2 = x_i$, la función de coste total no restringida $H_{QUBO}(x) = f(x) + P(x)$ se expresa de forma canónica mediante una matriz simétrica superior $Q \in \mathbb{R}^{N \times N}$ \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}:
+\begin{equation}
+    H_{QUBO}(x) = \sum_{i=1}^N \sum_{j \ge i}^N x_i Q_{ij} x_j
+\end{equation}
+Los elementos algebraicos de la matriz de acoplamiento QUBO $Q$ se deducen formalmente según las siguientes ecuaciones de contorno \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}:
+\begin{equation}
+    Q_{ii} = \frac{\lambda}{K^2} \sigma_{ii} - \frac{1-\lambda}{K} \mu_i + A (1 - 2K)
+\end{equation}
+\begin{equation}
+    Q_{ij} = \frac{2\lambda}{K^2} \sigma_{ij} + 2A, \quad \forall i \neq j
+\end{equation}
+
+\subsection{Mapeo al Hamiltoniano de Ising}
+Una vez estabilizada la matriz QUBO, se procede a su traslación hacia el espacio operacional físico de la QPU mediante la transformación del dominio binario clásico $x_i \in \{0, 1\}$ al operador de espín cuántico de Ising gobernado por la matriz de Pauli $Z$, donde el autoestado cuántico toma valores discretos en el rango $Z_i \in \{-1, 1\}$ \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. El homomorfismo algebraico estricto se establece mediante el cambio de variable de proyección lineal \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}:
+\begin{equation}
+    x_i \longrightarrow \frac{I - Z_i}{2}
+\end{equation}
+Donde $I$ representa la matriz identidad operativa \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. Sustituyendo de forma sistemática este operador en la función de coste QUBO, se deduce la descomposición espectral del Hamiltoniano de Ising del problema ($H_P$), el cual codifica las interacciones físicas entre los cúbits del registro \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}:
+\begin{equation}
+    H_P = \sum_{i=1}^N h_i Z_i + \sum_{i=1}^N \sum_{j > i}^N J_{ij} Z_i Z_j + O_{ffset}
+\end{equation}
+Los campos magnéticos locales longitudinales $h_i$ (coeficientes lineales) y las constantes de acoplamiento magnético bipolares $J_{ij}$ (coeficientes cuadráticos), junto con el término constante de traslación de energía ($O_{ffset}$), se calculan computacionalmente a partir de la estructura matricial de $Q$ mediante las relaciones analíticas descritas a continuación \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}:
+\begin{equation}
+    h_i = -\frac{1}{2} Q_{ii} - \frac{1}{4} \sum_{j \neq i}^N Q_{ij}
+\end{equation}
+\begin{equation}
+    J_{ij} = \frac{1}{4} Q_{ij}
+\end{equation}
+\begin{equation}
+    O_{ffset} = \frac{1}{2} \sum_{i=1}^N Q_{ii} + \frac{1}{4} \sum_{i=1}^N \sum_{j > i}^N Q_{ij} + A K^2
+\end{equation}
+Este mapeo garantiza una equivalencia exacta estricta (con un error de precisión numérica acotado por debajo de $< 10^{-6}$ bajo validación por tests automáticos) entre los autovalores clásicos del espacio combinatorio y los niveles de energía cuántica del espectro del Hamiltoniano \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. El comportamiento temporal de cálculo clásico y las propiedades espaciales asociadas a la resolución determinista de esta frontera de asignación se exponen en la Figura \ref{fig:tiempos_frontera}.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{output/figures/grafico_2_1_tiempos.png}
+        \caption{Tiempos de cómputo clásico.}
+        \label{fig:tiempos_clasico_sub}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{output/figures/grafico_2_2_frontera_eficiente.png}
+        \caption{Frontera eficiente de Markowitz.}
+        \label{fig:frontera_eficiente_sub}
+    \end{minipage}
+    \caption{Resultados del preprocesamiento clásico y modelado analítico de carteras: coste temporal bruto e identificación exacta de la frontera de media-varianza.}
+    \label{fig:tiempos_frontera}
+\end{figure}
+
+\section{Algoritmo Cuántico Variacional Híbrido: QAOA y Ansatzes Avanzados}
+\label{sec:qaoa_ansatzes_avanzados}
+
+\subsection{Fundamentos de QAOA Estándar e Ineficiencia de las Penalizaciones}
+El Algoritmo de Optimización Cuántica Aproximada (QAOA) implementado explota un principio variacional para aproximar el estado fundamental del Hamiltoniano $H_P$ mediante la aplicación parametrizada y secuencial de capas de evolución cuántica \cite{Farhi2014, McClean2018}. Para una profundidad entera de circuito $p \ge 1$, el estado cuántico variacional $|\psi(\gamma, \beta)\rangle$ se genera mediante la acción alterna de los operadores unitarios de evolución del problema y de mezcla sobre un estado inicial uniforme $|\psi_0\rangle$ \cite{Farhi2014}:
+\begin{equation}
+    |\psi(\gamma, \beta)\rangle = \left[ \prod_{m=1}^p U(H_M, \beta_m) U(H_P, \gamma_m) \right] |\psi_0\rangle
+\end{equation}
+Donde $U(H_P, \gamma_m) = e^{-i \gamma_m H_P}$ y $U(H_M, \beta_m) = e^{-i \beta_m H_M}$, siendo $\gamma, \beta \in \mathbb{R}^p$ los vectores de ángulos continuos optimizados por la CPU clásica \cite{Farhi2014}.
+
+En la formulación estándar de QAOA, el estado inicial corresponde a una superposición uniforme completa de todo el espacio de Hilbert ($|\psi_0\rangle = |+\rangle^{\otimes N}$) y el operador mezclador convencional responde a una dinámica de rotación transversal independiente en el eje X (\textit{Bit-Flip Mixer}): $H_M^Z = \sum X_i$ \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. El inconveniente fundamental de esta arquitectura radica en que el operador $H_M^Z$ induce transiciones de probabilidad indiscriminadas que fuerzan al circuito a explorar el espacio completo de estados $2^N$ \cite{uploaded:2.ObjetivosAlcanceYAntecedentes.md}. La restricción de cardinalidad exacta $K$ se confía únicamente a la acción penalizadora del término $A$ en $H_P$ \cite{uploaded:2.ObjetivosAlcanceYAntecedentes.md}. Como consecuencia directa, las amplitudes de probabilidad se dispersan de forma masiva en subespacios de soluciones inválidas, destruyendo la convergencia y provocando fenómenos de mesetas estériles que inhabilitan la optimización clásica de los parámetros variacionales \cite{McClean2018, uploaded:2.ObjetivosAlcanceYAntecedentes.md}.
+
+\subsection{Preservación de Simetría Estructural: XY-Mixer y Estados de Dicke}
+Para erradicar la ineficiencia intrínseca asociada al paradigma de penalizaciones cuadráticas, este proyecto incorpora un diseño de vanguardia fundamentado en circuitos cuánticos con preservación de simetría (\textit{symmetry-preserving ansatzes}) \cite{uploaded:2.ObjetivosAlcanceYAntecedentes.md}. Bajo este enfoque, el circuito cuántico se bloquea geométricamente para impedir la fuga de información cuántica fuera del subespacio restringido de soluciones válidas \cite{uploaded:2.ObjetivosAlcanceYAntecedentes.md}.
+
+En primer lugar, el estado inicial del registro se inicializa preparando de forma determinista un estado de Dicke $|D_K^N\rangle$, el cual representa una superposición uniforme simétrica de todos los estados de base computacional que poseen exactamente un peso de Hamming igual a la cardinalidad $K$, anulando la amplitud de cualquier configuración que viole la restricción financiera \cite{uploaded:2.ObjetivosAlcanceYAntecedentes.md}:
+\begin{equation}
+    |\psi_0\rangle = |D_K^N\rangle = \frac{1}{\sqrt{\binom{N}{K}}} \sum_{x \in \{0,1\}^N, \sum x_i = K} |x\rangle
+\end{equation}
+
+En segundo lugar, se sustituye el Hamiltoniano mezclador transversal por un mezclador avanzado basado en la interacción de intercambio XY de espín (\textit{XY-Mixer}) estructurado sobre un grafo de conectividad acoplado \cite{uploaded:2.ObjetivosAlcanceYAntecedentes.md}:
+\begin{equation}
+    H_M^{XY} = \frac{1}{2} \sum_{\langle i,j \rangle \in E} \left( X_i X_j + Y_i Y_j \right)
+\end{equation}
+Dado que el operador elemental de intercambio actúa permutando los estados de dos cúbits adyacentes ($|01\rangle \leftrightarrow |10\rangle$) si y solo si sus valores difieren, preserva la conservación del número total de excitaciones del sistema cuántico \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Demostrado algebraicamente, el Hamiltoniano mezclador conmuta estrictamente con el operador de conteo de partículas del registro: $[H_{M}^{XY}, \sum Z_i] = 0$ \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Esta propiedad de conmutación de simetría asegura de forma matemática que la evolución cuántica parametrizada queda confinada de por vida estrictamente dentro de la variedad geométrica factible de dimensión $\binom{N}{K}$ \cite{uploaded:2.ObjetivosAlcanceYAntecedentes.md}. El impacto de esta restricción física sobre el paisaje de coste y la viabilidad se detalla en la Figura \ref{fig:viabilidad_cost_landscape}.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{output/figures/grafico_3_1_tasa_viabilidad.png}
+        \caption{Tasa de viabilidad del espacio.}
+        \label{fig:tasa_viabilidad_sub}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{output/figures/grafico_3_2_cost_landscape.png}
+        \caption{Paisaje energético de coste.}
+        \label{fig:cost_landscape_sub}
+    \end{minipage}
+    \caption{Propiedades operacionales del Ansatz XY: estabilización de la factibilidad formal de muestreo frente a la deformación del paisaje inducido por las penalizaciones de QAOA estándar.}
+    \label{fig:viabilidad_cost_landscape}
+\end{figure}
+
+\section{Algoritmo JaspQAOA y Optimización Clásica Regularizada}
+\label{sec:jaspqaoa_optim_regularizada}
+
+\subsection{Infraestructura del Entorno de Simulación con Aceleración JAX}
+Para mitigar el cuello de botella computacional asociado a la simulación exacta de funciones de onda densas en registros que escalan hasta $N=20$ cúbits, se ha integrado el entorno especializado \textit{JaspQAOA} \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. Este framework se encuentra acoplado de forma nativa al motor de computación científica \textit{JAX}, permitiendo explotar el paradigma de diferenciación automática (\textit{autograd}) y la compilación Just-In-Time (JIT) sobre aceleradores gráficos (CPUs/GPUs) \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. Este diseño de software optimiza los tiempos de cálculo de los valores esperados de energía $\langle \psi(\gamma,\beta) | H_P | \psi(\gamma,\beta) \rangle$, logrando una contracción temporal superior al $\ge 20\%$ en circuitos densos de alta profundidad, satisfaciendo el criterio de éxito establecido \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. El perfil de distribución final de los activos resultantes y las curvas de convergencia variacional asociadas se exponen en la Figura \ref{fig:distribucion_convergencia}.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{output/figures/grafico_4_1_distribucion_final.png}
+        \caption{Distribución de pesos de la cartera.}
+        \label{fig:distribucion_final_sub}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{output/figures/grafico_4_2_convergencia.png}
+        \caption{Curva de convergencia en optimización.}
+        \label{fig:convergencia_sub}
+    \end{minipage}
+    \caption{Métricas de ejecución bajo el framework acelerado JaspQAOA: perfil combinatorio óptimo hallado y tasa de convergencia del optimizador clásico.}
+    \label{fig:distribucion_convergencia}
+\end{figure}
+
+\subsection{Estrategia de Regularización Bicapa: TQA y Regularización Ridge $L_2$}
+Con el objetivo de suavizar la rugosidad del paisaje de pérdida variacional y acelerar la convergencia de solucionadores clásicos libres de gradiente (COBYLA) controlados por la CPU, se ha desarrollado un mecanismo de regularización bicapa integrado en la lógica del solver \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}:
+\begin{enumerate}
+    \item \textbf{Evolución Adiabática Trotterizada (TQA):} En lugar de inicializar los ángulos continuos de forma pseudoaleatoria (lo cual agrava la inducción de mínimos locales y mesetas estériles), se parametriza el punto de partida emulando un programa de recocido adiabático clásico discretizado en $p$ pasos lógicos de tiempo \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Los coeficientes transicionan linealmente según las leyes de control temporal: $\gamma_m = (m/p)\Delta t$ y $\beta_m = (1 - m/p)\Delta t$ \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Esta heurística sitúa el estado fundamental en la vecindad del óptimo global, reduciendo el conteo de evaluaciones clásicas en un $\ge 15\%$ \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}.
+    \item \textbf{Penalización Continua Ridge $L_2$:} Durante la fase variacional, se acopla a la función de pérdida un término de penalización de Tikhonov penalizando la norma euclídea de las desviaciones. Este componente estabiliza las variaciones de gradiente en las proximidades del óptimo fijado en $\alpha = 0.1$ \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}.
+\end{enumerate}
+
+La trayectoria analítica de estas trayectorias de optimización y el impacto estructural de la regularización Ridge se presentan en la Figura \ref{fig:trayectorias_ridge}.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{output/figures/grafico_5_1_trayectorias_optimizacion.png}
+        \caption{Trayectorias de los ángulos variacionales.}
+        \label{fig:trayectorias_opt_sub}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{output/figures/grafico_5_2_impacto_ridge.png}
+        \caption{Suavizado del paisaje mediante Ridge $L_2$.}
+        \label{fig:impacto_ridge_sub}
+    \end{minipage}
+    \caption{Análisis del esquema de regularización del bucle híbrido: evolución dinámica de los parámetros $(\gamma, \beta)$ y efecto del suavizado de Tikhonov.}
+    \label{fig:trayectorias_ridge}
+\end{figure}
+
+\section{Análisis de Rendimiento Financiero por Régimen Macroeconómico}
+\label{sec:rendimiento_financiero_regimenes}
+
+La validación empírica de las soluciones financieras se audita de forma homogeneizada cruzando las métricas de error de optimización frente al comportamiento del modelo fuera de muestra (\textit{out-of-sample}) bajo los tres entornos macroeconómicos previamente definidos \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Se evalúan críticamente el Optimization GAP (desviación porcentual respecto a Gurobi) y el Ratio de Sharpe anualizado (rendimiento excedente por unidad de riesgo de mercado) \cite{etxaaniiz/tfm/Etxaaniiz-TFM-5f3b64efa1b48bcbc944313d6d3a6da4263f04ad/Especificacion_Tecnica_Final_TFM_v1.md}. Las respuestas dinámicas de estas variables en los regímenes alcistas, bajistas y laterales se desglosan en las curvas de la Figura \ref{fig:gap_sharpe_regimenes}.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{output/figures/grafico_6_1_gap_regimenes.png}
+        \caption{Optimization GAP según el régimen.}
+        \label{fig:gap_regimenes_sub}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{output/figures/grafico_6_2_sharpe_regimenes.png}
+        \caption{Ratio de Sharpe fuera de muestra.}
+        \label{fig:sharpe_regimenes_sub}
+    \end{minipage}
+    \caption{Evaluación del comportamiento financiero y algorítmico cruzado: impacto analítico de los entornos estocásticos de mercado sobre la estabilidad del modelo cuántico.}
+    \label{fig:gap_sharpe_regimenes}
+\end{figure}
+
+Los resultados demuestran que en regímenes de alta volatilidad y corrección (Bear Market), el confinamiento en el subespacio factible operado por XY-QAOA regularizado estabiliza carteras con una diversificación óptima que amortigua el riesgo sistémico, superando la inestabilidad predictiva del Simulated Annealing clásico y logrando aproximar la frontera eficiente exacta de Gurobi con una precisión media elevada \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}.
+
+\section{Límites de Expresividad y Complejidad Física del Hardware}
+\label{sec:limites_expresividad_hardware}
+
+\subsection{El Compromiso de Expresividad del Circuito Variacional}
+Los resultados numéricos revelan una propiedad matemática crítica vinculada al compromiso entre el tamaño del espacio de búsqueda combinatorio y los recursos cuánticos disponibles \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Al analizar la evolución del error de optimización a medida que el universo de activos candidatos escala desde $N=12$ hasta $N=20$, se registra un repunte sistemático en el desvío de la energía fundamental respecto a la solución exacta de Gurobi cuando la profundidad del circuito se mantiene congelada en un nivel bajo ($p=3$) \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}.
+
+Este fenómeno no obedece a deficiencias en el software, sino a la manifestación teórica del límite de expresividad del \textit{ansatz} cuántico \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Mientras que el subespacio factible de Dicke $\binom{N}{K}$ experimenta una explosión combinatoria de naturaleza exponencial al incrementar $N$, mantener la profundidad del circuito congelada en $p=3$ implica que el optimizador clásico en la CPU solo dispone de un conjunto rígido de $2p = 6$ parámetros de control continuos $(\gamma_m, \beta_m)$ para ajustar las amplitudes de probabilidad cuánticas \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Con tan escasos grados de libertad, el circuito variacional pierde la capacidad representativa para cubrir densamente el espacio de Hilbert y sintonizar la fase cuántica hacia el autoestado fundamental exacto \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Se deduce de este modo una ley de correspondencia científica mandatoria: es estrictamente necesario escalar de forma coordinada la profundidad del circuito ($p$) a costa de asumir un mayor coste de ruido y compuertas lógicas en el hardware cuántico para mantener la precisión matemática en problemas de gran escala ($N > 20$) \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}.
+
+\subsection{Complejidad de Hardware y Transpilación en Topologías Lineales}
+Un análisis riguroso de la viabilidad práctica exige evaluar el coste físico de transpilación del circuito sobre arquitecturas NISQ con restricciones reales de conectividad geométrica \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Mientras que el modelado abstracto asume un grafo de interacciones acoplado completo (\textit{All-to-All}), los procesadores físicos limitan sus conexiones a vecindarios inmediatos \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. En este proyecto se ha simulado la transpilación del mezclador XY asumiendo una topología lineal estricta de tipo Linear Nearest Neighbor (LNN) empleando el compilador de la librería Qrisp \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}.
+
+El acoplamiento del mezclador XY exige aplicar compuertas de intercambio entre pares de cúbits no adyacentes \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Al carecer de conectividad directa en la LNN, el algoritmo se ve obligado a inyectar secuencias repetitivas de puertas de permutación (\textit{SWAP Gates}) para desplazar físicamente los estados cuánticos a través de los hilos conductores de la QPU hasta lograr la adyacencia espacial necesaria \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Debido a la imposibilidad de paralelizar las puertas de intercambio XY entre cúbits acoplados en la cadena física, cada capa algorítmica adicional de QAOA castiga directamente la profundidad del circuito \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Como consecuencia de este ruteo geométrico, tanto el conteo neto de compuertas lógicas de dos cúbits (puertas CNOT) como la profundidad física del circuito (\textit{Gate Depth}) experimentan un escalamiento agresivo y paralelo que castiga severamente la duración del circuito frente a los tiempos de decoherencia del hardware cuántico \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. Esto impone un \textit{trade-off} crítico: el mezclador XY es algorítmicamente perfecto porque confina la física al subespacio factible, pero su costo de transpilación geométrica limita su ejecución en dispositivos NISQ actuales sin mitigación de errores avanzada, proyectando su verdadero potencial para la era de la computación cuántica tolerante a fallos (FTQC) \cite{uploaded:3.DesarrolloYMemoriaTecnica.md}. La tasa empírica de este escalamiento de recursos físicos y de precisión cuántica se ilustra en la Figura \ref{fig:scaling_hardware}.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{output/figures/grafico_7_1_scaling_gap.png}
+        \caption{Repunte del GAP por expresividad.}
+        \label{fig:scaling_gap_sub}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{output/figures/grafico_7_2_gate_depth.png}
+        \caption{Escalamiento físico de Gate Depth.}
+        \label{fig:gate_depth_sub}
+    \end{minipage}
+    \caption{Límites del hardware cuántico NISQ: degradación analítica del Optimization GAP bajo profundidad fija y proliferación de compuertas lógicas por ruteo geométrico en topologías LNN.}
+    \label{fig:scaling_hardware}
+\end{figure}
