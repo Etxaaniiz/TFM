@@ -482,7 +482,8 @@ def generate_plot_3_1(df_returns, output_dir, use_qrisp, test_mode):
                 Q0[i, j] = val / 2.0
                 Q0[j, i] = val / 2.0
                 
-        P = 1.5 * np.max(np.abs(Q0))
+        # Criterio canónico P = 10 * max|Q0|, coherente con portfolio_model.py
+        P = 10.0 * np.max(np.abs(Q0))
         Q = build_qubo(mu, Sigma, K, lambda_val=0.5, penalty=P)
         
         if use_qrisp and QRISP_AVAILABLE:
@@ -652,7 +653,8 @@ def generate_plot_4_1(df_returns, output_dir, use_qrisp, test_mode):
             Q0[i, j] = val / 2.0
             Q0[j, i] = val / 2.0
             
-    P = 1.5 * np.max(np.abs(Q0))
+    # Criterio canónico P = 10 * max|Q0|, coherente con portfolio_model.py
+    P = 10.0 * np.max(np.abs(Q0))
     Q = build_qubo(mu, Sigma, K, lambda_val=0.5, penalty=P)
     
     p = 3
@@ -895,23 +897,33 @@ def generate_plot_5_2(df_returns, output_dir, test_mode):
         gurobi_obj = -15.636177
         
     tqa_anchor = find_tqa_anchor_emulator(N, K, Q, p, mixer="xy")
-    
-    # Corremos el bucle de optimización real para verificar el flujo de cómputo
+
+    # ── Bucle de optimización real: recogemos los resultados de cada (alpha, seed) ──
+    gap_by_alpha = {alpha: [] for alpha in alphas}
+
     for alpha in alphas:
         for seed in seeds:
             np.random.seed(seed)
-            perturbed_init = tqa_anchor + np.random.normal(0, 0.4, size=2*p)
-            def obj_func(params):
+            perturbed_init = tqa_anchor + np.random.normal(0, 0.4, size=2 * p)
+
+            def obj_func(params, _alpha=alpha):
                 energy, _, _ = run_emulator_qaoa(N, K, Q, p, params, mixer="xy")
-                penalty = alpha * np.sum((params - tqa_anchor) ** 2)
+                penalty = _alpha * np.sum((params - tqa_anchor) ** 2)
                 return energy + penalty
-            _ = minimize(obj_func, perturbed_init, method='COBYLA', options={'maxiter': 5 if test_mode else 30})
-            
-    # Mapeo de datos para el Tradeoff Sesgo-Varianza (Bias-Variance Tradeoff)
-    # Esto asegura que el gráfico ilustre el concepto académico deseado frente a la
-    # degeneración natural del subespacio factible de esta cartera específica.
-    mean_gaps = np.array([4.8, 2.5, 0.8, 1.6, 3.5])
-    std_gaps = np.array([1.2, 0.6, 0.1, 0.02, 0.005])
+
+            res_alpha = minimize(
+                obj_func, perturbed_init, method='COBYLA',
+                options={'maxiter': 5 if test_mode else 30}
+            )
+            # Evaluación de la energía final SIN penalización (energía real del circuito)
+            final_energy, _, _ = run_emulator_qaoa(N, K, Q, p, res_alpha.x, mixer="xy")
+            # GAP relativo respecto a Gurobi (% de suboptimalidad)
+            denom = abs(gurobi_obj) if abs(gurobi_obj) > 1e-9 else 1e-9
+            gap_pct = max(0.0, (final_energy - gurobi_obj) / denom * 100.0)
+            gap_by_alpha[alpha].append(gap_pct)
+
+    mean_gaps = np.array([np.mean(gap_by_alpha[a]) for a in alphas])
+    std_gaps = np.array([np.std(gap_by_alpha[a]) for a in alphas])
     
     plt.figure(figsize=(8.5, 5.5))
     
