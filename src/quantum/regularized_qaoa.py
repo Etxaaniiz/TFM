@@ -167,4 +167,10 @@ class RegularizedQAOAProblem(QAOAProblem):
                 options=options,
                 args=(qarg, compiled_qc, symbols, mes_kwargs),
             )
+            # Para ejecutar con el emulador puro NumPy (classical_emulators.py):
+            # from src.quantum.classical_emulators import solve_qaoa_pure_numpy
+            # # inst = {'N': len(qarg), 'K': K, 'mu': mu, 'Sigma': Sigma, 'Q': Q, ...}
+            # # res_np = solve_qaoa_pure_numpy(inst, p=depth, mixer="xy", init_type=init_type, alpha=self.alpha, maxiter=options.get('maxiter', 100))
+            # # return res_np["optimal_angles"], res_np["energy"]
+
             return res_sample.x, res_sample.fun

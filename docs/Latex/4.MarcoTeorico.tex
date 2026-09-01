@@ -1,0 +1,281 @@
+\chapter{Marco Teórico}
+\label{cap:marco_teorico}
+
+% ==============================================================================
+% 4.1. INTRODUCCIÓN DEL CAPÍTULO
+% ==============================================================================
+\section{Introducción del Capítulo}
+\label{sec:intro_marco_teorico}
+
+El presente capítulo retoma el posicionamiento taxonómico establecido al cierre del Capítulo~\ref{cap:objetivos_alcance_antecedentes} con el propósito de formalizar el aparato analítico y los fundamentos físicos sobre los que se sustenta la arquitectura cuántica propuesta. La exposición se articula en una secuencia deductiva estructurada en tres bloques conceptuales: en primer lugar, la derivación algebraica que traslada el problema financiero de selección de carteras desde el espacio continuo de Markowitz hasta una red de espines descrita por un Hamiltoniano de Ising; en segundo lugar, el diseño físico del circuito cuántico variacional, contrastando los operadores no restringidos del algoritmo QAOA estándar frente al confinamiento geométrico en estados de Dicke mediante operadores de intercambio $XY$; y, en tercer lugar, los mecanismos matemáticos orientados a mitigar la rugosidad energética y el desvanecimiento de gradientes en el bucle clásico mediante inicialización adiabática troterizada (TQA) y regularización continua Ridge $L_2$.
+
+A diferencia del Capítulo~\ref{cap:marco_experimental}, que detalla la instanciación concreta de estos elementos sobre series temporales reales, la arquitectura de compilación del software y la parametrización numérica, el presente capítulo se limita estrictamente a establecer su justificación teórica y su formulación matemática universal.
+
+% ==============================================================================
+% 4.2. DE LAS FINANZAS A LOS CÚBITS: FORMULACIÓN MATEMÁTICA
+% ==============================================================================
+\section{De las Finanzas a los Cúbits: Formulación Matemática}
+\label{sec:formulacion_matematica}
+
+\subsection{El Modelo Continuo de Media-Varianza}
+\label{subsec:markowitz_continuo}
+
+El punto de partida analítico de la teoría moderna de carteras \cite{Markowitz1952} radica en la ponderación óptima de un conjunto de $N$ activos financieros disponibles en el mercado. En su formulación clásica continua, la cartera se parametriza mediante un vector de pesos $w = (w_1, w_2, \dots, w_N)^T \in \mathbb{R}^N$, donde cada componente $w_i$ representa la proporción del capital total asignada al activo $i$. El rendimiento esperado de la cartera, denotado por $\mu_p$, se define como la combinación lineal de los rendimientos esperados individuales $\mu_i$:
+\begin{equation}
+    \mu_p = \sum_{i=1}^{N} w_i \mu_i = \mu^T w
+    \label{eq:retorno_cartera}
+\end{equation}
+donde $\mu = (\mu_1, \mu_2, \dots, \mu_N)^T \in \mathbb{R}^N$ constituye el vector de retornos esperados. A su vez, el riesgo sistémico de la cartera se cuantifica a través de su varianza $\sigma_p^2$, la cual captura no solo la volatilidad individual de cada instrumento financiero sino también las correlaciones estadísticas cruzadas entre pares de activos:
+\begin{equation}
+    \sigma_p^2 = \sum_{i=1}^{N} \sum_{j=1}^{N} w_i w_j \sigma_{ij} = w^T \Sigma w
+    \label{eq:riesgo_cartera}
+\end{equation}
+siendo $\Sigma \in \mathbb{R}^{N \times N}$ la matriz simétrica y semidefinida positiva de varianzas-covarianzas, cuyos elementos diagonales $\sigma_{ii} = \sigma_i^2$ reflejan la varianza de cada activo y los elementos no diagonales $\sigma_{ij}$ representan la covarianza entre los activos $i$ y $j$.
+
+Bajo este marco, el inversor racional busca balancear simultáneamente dos fuerzas opuestas: la minimización del riesgo global de mercado frente a la maximización del rendimiento esperado.
+
+\subsection{Discretización Binaria y Formulación QUBO}
+\label{subsec:discretizacion_qubo}
+
+Para trasladar el modelo de Markowitz a una arquitectura digital cuántica basada en cúbits y adaptarlo a las condiciones operativas de gestión pasiva o indexación, se discretiza la toma de decisiones mediante variables binarias de inclusión/exclusión:
+\begin{equation}
+    x_i \in \{0, 1\}, \qquad \forall i \in \{1, \dots, N\}
+    \label{eq:variable_binaria}
+\end{equation}
+donde $x_i = 1$ denota que el activo $i$ es seleccionado para formar parte de la cartera, mientras que $x_i = 0$ indica su exclusión.
+
+Con el objetivo de preservar la naturaleza puramente combinatoria del problema y evitar la necesidad de registros continuos auxiliares que sobrecargarían el hardware NISQ, se adopta una política de equiponderación del capital entre los activos seleccionados. Bajo esta premisa, el peso de cada activo se define analíticamente como $w_i = x_i / K$, donde $K \in \mathbb{N}$ ($1 \le K \le N$) representa la cardinalidad estricta o número exacto de activos a seleccionar.
+
+Dado que un modelo de Optimización Binaria Cuadrática No Restringida (QUBO, por sus siglas en inglés, \textit{Quadratic Unconstrained Binary Optimization}) no admite restricciones duras explícitas por definición, la condición de cardinalidad $\sum_{i=1}^N x_i = K$ debe penalizarse algebraicamente dentro de la propia función de energía. Esto se logra incorporando un término cuadrático de penalización:
+\begin{equation}
+    P \left( \sum_{i=1}^N x_i - K \right)^2
+    \label{eq:penalizacion_cardinalidad}
+\end{equation}
+donde $P > 0$ actúa como un multiplicador de penalización de Lagrange estático.
+
+Ensamblando el compromiso media-varianza ponderado por el coeficiente de aversión al riesgo del inversor $\lambda \in [0, 1]$ junto con la penalización de cardinalidad, se obtiene la función de coste QUBO global:
+\begin{equation}
+    Q(x) = \lambda \, w^T \Sigma w - (1-\lambda)\, \mu^T w + P \left( \sum_{i=1}^N x_i - K \right)^2
+    \label{eq:qubo_completo}
+\end{equation}
+Sustituyendo $w_i = x_i / K$ y expandiendo el binomio cuadrático, la Ecuación~\eqref{eq:qubo_completo} se expresa matricialmente en la forma canónica $Q(x) = x^T Q x$, donde $Q \in \mathbb{R}^{N \times N}$ es una matriz simétrica cuyos elementos diagonales integran los retornos esperados, las varianzas propias y los términos lineales de la penalización, mientras que los elementos fuera de la diagonal codifican las covarianzas cruzadas y las penalizaciones por pares de activos. Para garantizar la validez matemática del modelo, la magnitud del multiplicador $P$ debe calibrarse de modo que supere holgadamente el coste financiero de cualquier cartera factible, asegurando que cualquier configuración no factible ($\sum x_i \neq K$) posea un valor de energía estrictamente superior al óptimo admisible.
+
+\subsection{Mapeo al Hamiltoniano de Ising}
+\label{subsec:mapeo_ising}
+
+Para que la función de coste clásica $Q(x)$ pueda ser evaluada en un computador cuántico, las variables binarias $x_i \in \{0, 1\}$ deben transformarse en observables cuánticos físicamente medibles. Dicha correspondencia se realiza mediante la transformación afín a operadores de espín de Pauli $Z_i \in \{-1, +1\}$:
+\begin{equation}
+    x_i = \frac{I - Z_i}{2}
+    \label{eq:transformacion_spin}
+\end{equation}
+donde $I$ es la matriz identidad de orden 2 y $Z_i$ es la matriz de Pauli en el eje $Z$ actuando sobre el cúbit $i$:
+\begin{equation}
+    Z_i = \begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix}
+\end{equation}
+Bajo esta convención, el estado cuántico fundamental $|0\rangle$ (autovalor $+1$) corresponde a la variable inactiva $x_i = 0$, mientras que el estado excitado $|1\rangle$ (autovalor $-1$) corresponde a la variable seleccionada $x_i = 1$.
+
+Al sustituir la transformación afín de la Ecuación~\eqref{eq:transformacion_spin} en la expresión matricial de la Ecuación~\eqref{eq:qubo_completo}, la función de coste QUBO se mapea de forma exacta en un Hamiltoniano de Ising diagonal:
+\begin{equation}
+    H_P = \sum_{i=1}^N h_i Z_i + \sum_{i=1}^N \sum_{j > i}^N J_{ij} Z_i Z_j + \mathcal{O}_{\text{ffset}}
+    \label{eq:hamiltoniano_ising}
+\end{equation}
+donde las magnitudes físicas del sistema cuántico poseen una correlación directa con la formulación financiera:
+\begin{itemize}
+    \item Los acoplamientos cuadráticos inter-cúbits $J_{ij}$ quedan gobernados por la estructura de covarianza $\Sigma_{ij}$ del mercado financiero combinada con el término cruzado de la penalización $P$.
+    \item Los campos magnéticos locales $h_i$ representan el sesgo individual de cada activo, compuesto por su retorno esperado $\mu_i$, su varianza individual $\sigma_{ii}$ y la contribución lineal de la expansión del término de cardinalidad.
+    \item El término $\mathcal{O}_{\text{ffset}} \in \mathbb{R}$ constituye un desfase energético escalar constante que desplaza globalmente el espectro de autovalores sin alterar el ordenamiento de los estados ni la posición del mínimo global ($\operatorname{arg\,min}$).
+\end{itemize}
+
+La Figura~\ref{fig:diagrama_mapeo} esquematiza el flujo deductivo completo desde la ingesta de las series financieras hasta la instanciación de la red de espines de Ising.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{output/figures_tfm/4.MarcoTeorico/diagrama_flujo_mapeo.png}
+    \caption{Diagrama de flujo conceptual del mapeo matemático: desde la ingesta de parámetros financieros clásicos ($\mu, \Sigma$) hasta la instanciación de la red de espines del Hamiltoniano de Ising.}
+    \label{fig:diagrama_mapeo}
+\end{figure}
+
+La verificación formal y numérica de que este procedimiento de transformación preserva estrictamente la energía del problema de optimización en la totalidad del espacio discreto se evalúa empíricamente en el Capítulo~\ref{cap:evaluacion_resultados}, dando cumplimiento directo al Objetivo Específico OE1 formulado en la Sección~\ref{subsec:objetivos_especificos}.
+
+% ==============================================================================
+% 4.3. ARQUITECTURA CUÁNTICA: QAOA ESTÁNDAR FRENTE A PRESERVACIÓN DE SIMETRÍA
+% ==============================================================================
+\section{Arquitectura Cuántica: QAOA Estándar frente a Preservación de Simetría}
+\label{sec:arquitectura_cuantica}
+
+\subsection{QAOA Estándar y el Mezclador Transversal}
+\label{subsec:qaoa_estandar}
+
+El Algoritmo de Optimización Cuántica Aproximada (QAOA) estándar \cite{Farhi2014} busca aproximar el estado fundamental del Hamiltoniano de coste $H_P$ aplicando de manera intercalada $p$ capas o bloques unitarios sobre un estado de referencia inicial $|\psi_0\rangle$. En el paradigma estándar, el estado inicial se prepara como la superposición cuántica uniforme de todas las $2^N$ combinaciones posibles:
+\begin{equation}
+    |\psi_0\rangle = |+\rangle^{\otimes N} = \frac{1}{\sqrt{2^N}} \sum_{x \in \{0,1\}^N} |x\rangle
+    \label{eq:superposicion_uniforme}
+\end{equation}
+El ansatz variacional de profundidad $p$ se construye aplicando secuencialmente el operador unitario de coste $U_C(\gamma_m) = e^{-i \gamma_m H_P}$ y el operador unitario mezclador $U_M(\beta_m) = e^{-i \beta_m H_M}$, parametrizados por los vectores de ángulos $\boldsymbol{\gamma} = (\gamma_1, \dots, \gamma_p)$ y $\boldsymbol{\beta} = (\beta_1, \dots, \beta_p)$:
+\begin{equation}
+    |\psi(\boldsymbol{\gamma}, \boldsymbol{\beta})\rangle = \prod_{m=1}^{p} U_M(\beta_m) U_C(\gamma_m) |\psi_0\rangle = \left( \prod_{m=1}^{p} e^{-i \beta_m H_M} e^{-i \gamma_m H_P} \right) |+\rangle^{\otimes N}
+    \label{eq:ansatz_qaoa}
+\end{equation}
+En el QAOA convencional, el operador generador del mezclador es el operador transversal $X$-Mixer:
+\begin{equation}
+    H_M = \sum_{i=1}^N X_i
+    \label{eq:mezclador_x}
+\end{equation}
+donde $X_i$ es la matriz de Pauli en el eje $X$ sobre el cúbit $i$.
+
+Dado que el operador $X_i$ actúa invirtiendo el estado de la base computacional ($X|0\rangle = |1\rangle$ y $X|1\rangle = |0\rangle$), el mezclador transversal conecta de forma indiscriminada todos los vértices del hipercubo binario $\{0,1\}^N$. En consecuencia, la dinámica cuántica explora la totalidad del espacio de Hilbert de dimensión $2^N$, incluyendo estados que violan masivamente la restricción de cardinalidad $\sum x_i = K$. Bajo este esquema, la única fuerza que orienta la evolución hacia el subespacio válido procede del término de penalización $P$ de la Ecuación~\eqref{eq:penalizacion_cardinalidad}.
+
+\subsection{Consecuencia: Deformación del Paisaje y Barren Plateaus}
+\label{subsec:barren_plateaus}
+
+El uso de penalizaciones duras para guiar el mezclador transversal genera dos patologías matemáticas severas en la era NISQ:
+\begin{enumerate}
+    \item \textbf{Deformación del espectro de energía:} Para evitar que el circuito converja a configuraciones no factibles, el multiplicador $P$ debe ser significativamente mayor que las diferencias energéticas entre combinaciones financieras válidas. Esta disparidad de escalas crea un paisaje altamente accidentado, dominado por barreras de potencial abruptas y múltiples mínimos locales artificiales que atrapan al optimizador clásico.
+    \item \textbf{Mesetas estériles (\textit{Barren Plateaus}):} Tal como demostraron McClean et al. \cite{McClean2018}, en circuitos cuánticos parametrizados sin estructuras de simetría específicas e inicializados aleatoriamente, la varianza del gradiente de la función de coste respecto a los parámetros variacionales decae exponencialmente con el número de cúbits $N$:
+    \begin{equation}
+        \operatorname{Var}_{\boldsymbol{\theta}} \left[ \frac{\partial \langle H_P \rangle}{\partial \theta_k} \right] \sim \mathcal{O}\left( \frac{1}{2^N} \right)
+        \label{eq:varianza_gradiente}
+    \end{equation}
+    donde $\boldsymbol{\theta} = (\boldsymbol{\gamma}, \boldsymbol{\beta})$. Como consecuencia directa, para registros con $N \ge 12$ cúbits, el gradiente se vuelve numéricamente indistinguible de cero en casi la totalidad del espacio de fases, anulando la capacidad de los optimizadores locales clásicos (como COBYLA o SLSQP) para actualizar los ángulos de manera eficiente.
+\end{enumerate}
+
+La Figura~\ref{fig:barren_plateaus} ilustra conceptualmente la transición entre un paisaje optimizable con gradientes útiles y la planicie sin información característica de las mesetas estériles.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{output/figures_tfm/4.MarcoTeorico/barren_plateaus.png}
+    \caption{Representación conceptual del impacto de la varianza del gradiente en algoritmos variacionales. El panel A muestra un paisaje con gradientes fuertes donde un optimizador puede descender fácilmente al mínimo, mientras que el panel B ilustra la meseta estéril (\textit{Barren Plateau}) descrita por McClean \textit{et al.} \cite{McClean2018}, donde el gradiente es cero en casi todo el espacio, impidiendo la convergencia de optimizadores locales clásicos.}
+    \label{fig:barren_plateaus}
+\end{figure}
+
+Ante esta doble limitación, el diseño de este trabajo sustituye la formulación penalizada por una arquitectura cuántica que confina la evolución del estado estrictamente dentro del subespacio factible mediante principios de simetría física.
+
+\subsection{Estados de Dicke y Confinamiento Combinatorio}
+\label{subsec:estados_dicke}
+
+Para asegurar que el circuito cuántico solo explore carteras válidas, se inicializa el sistema en un estado de Dicke $|D_K^N\rangle$. Un estado de Dicke se define como la superposición cuántica uniforme y simétrica de todos los estados de la base computacional de $N$ cúbits que poseen exactamente un peso de Hamming igual a $K$ (es decir, exactamente $K$ cúbits en el estado $|1\rangle$ y $N-K$ cúbits en el estado $|0\rangle$):
+\begin{equation}
+    |D_K^N\rangle = \binom{N}{K}^{-1/2} \sum_{\substack{x \in \{0,1\}^N \\ |x|=K}} |x\rangle
+    \label{eq:estado_dicke}
+\end{equation}
+Al preparar deterministamente el estado $|D_K^N\rangle$ como estado inicial $|\psi_0\rangle$ en lugar de $|+\rangle^{\otimes N}$, la totalidad de la amplitud de probabilidad inicial queda concentrada en configuraciones matemáticamente admisibles. 
+
+La Figura~\ref{fig:espacio_dicke} representa la drástica reducción dimensional obtenida mediante este confinamiento frente al espacio completo de Hilbert $2^N$. El impacto cuantitativo de esta reducción sobre diversos tamaños de universo $N$ y cardinalidades $K$ se formalizó en la Tabla~\ref{tab:dimension_espacio} del Capítulo~\ref{cap:introduccion}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{output/figures_tfm/4.MarcoTeorico/espacio_dicke_combinatorio.png}
+    \caption{Representación de la reducción de la dimensionalidad combinatoria. El QAOA estándar se enfrenta al espacio completo de Hilbert $2^N$, mientras que el XY-QAOA explora exclusivamente el subespacio de Dicke $\binom{N}{K}$ que contiene las configuraciones válidas.}
+    \label{fig:espacio_dicke}
+\end{figure}
+
+\subsection{El Operador de Mezcla XY y su Conmutación con el Peso de Hamming}
+\label{subsec:mezclador_xy}
+
+Para mantener el estado confinado en el subespacio de Dicke durante las $p$ capas del circuito, es indispensable sustituir el mezclador transversal $X$-Mixer por un operador que conserve invariante el peso de Hamming. Con este fin, se implementa el mezclador de intercambio $XY$ ($XY$-Mixer) \cite{Barkoutsos2020}:
+\begin{equation}
+    H_{M}^{XY} = \frac{1}{2} \sum_{\langle i,j \rangle \in E} \left( X_i X_j + Y_i Y_j \right)
+    \label{eq:mezclador_xy}
+\end{equation}
+donde la suma se extiende sobre los enlaces $\langle i,j \rangle$ definidos por la topología de acoplamiento del grafo $G=(V,E)$ entre los cúbits, y $Y_i$ es la matriz de Pauli en el eje $Y$.
+
+En términos de operadores de subida y bajada cuánticos ($\sigma_i^+ = \frac{X_i + iY_i}{2}$ y $\sigma_i^- = \frac{X_i - iY_i}{2}$), el operador $XY$ adopta la forma de una interacción de salto o intercambio de excitaciones:
+\begin{equation}
+    \frac{1}{2} (X_i X_j + Y_i Y_j) = \sigma_i^+ \sigma_j^- + \sigma_i^- \sigma_j^+
+\end{equation}
+Físicamente, este operador realiza una transferencia de amplitudes entre pares de cúbits adyacentes si y solo si se encuentran en estados opuestos:
+\begin{equation}
+    |01\rangle \longleftrightarrow |10\rangle, \qquad |00\rangle \longrightarrow 0, \qquad |11\rangle \longrightarrow 0
+\end{equation}
+La justificación matemática fundamental del algoritmo reside en la conmutación estricta entre el Hamiltoniano mezclador $H_M^{XY}$ y el operador contador de cardinalidad $\hat{K} = \sum_{i=1}^N \frac{I - Z_i}{2}$:
+\begin{equation}
+    \left[ H_{M}^{XY}, \sum_{i=1}^N Z_i \right] = 0 \quad \Longrightarrow \quad \left[ H_{M}^{XY}, \hat{K} \right] = 0
+    \label{eq:conmutador_xy}
+\end{equation}
+Dado que el generador de la evolución unitaria conmuta con el operador de número de partículas, el teorema de conservación de Noether en mecánica cuántica asegura que cualquier evolución unitaria $U_M^{XY}(\beta) = e^{-i \beta H_M^{XY}}$ preserva de manera exacta los autovalores del operador de peso de Hamming. Por consiguiente, si el circuito se inicializa en $|D_K^N\rangle$, la probabilidad de medir una solución con un número de activos distinto de $K$ es estrictamente nula por construcción física ($100\%$ de factibilidad matemática), eliminando de raíz la necesidad de términos de penalización $P$.
+
+La topología del circuito cuántico resultante se detalla en la Figura~\ref{fig:topologia_xy}, intercalando la aplicación en bloque del Hamiltoniano de coste $U_C(\gamma)$ con compuertas de dos cúbits de intercambio $U_M^{XY}(\beta)$.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{output/figures_tfm/4.MarcoTeorico/topologia_circuito_xy.png}
+    \caption{Topología general del circuito cuántico XY-QAOA: inicialización determinista en el estado de Dicke, seguida por la aplicación iterativa de los operadores de coste $U_C(\gamma)$ y los operadores de mezcla con preservación de peso de Hamming $U_M^{XY}(\beta)$.}
+    \label{fig:topologia_xy}
+\end{figure}
+
+El Cuadro~\ref{tab:comparativa_mixers} sintetiza las diferencias analíticas entre ambos operadores mezcladores.
+
+\begin{table}[htbp]
+    \centering
+    \small
+    \caption{Comparativa analítica entre el mezclador transversal ($X$) y el mezclador de intercambio ($XY$).}
+    \label{tab:comparativa_mixers}
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{lcc}
+        \toprule
+        \textbf{Propiedad Analítica} & \textbf{Mezclador $X$ (Estándar)} & \textbf{Mezclador $XY$ (Preservación de Simetría)} \\
+        \midrule
+        Operador Generador & $\sum_{i=1}^N X_i$ & $\frac{1}{2} \sum_{\langle i,j \rangle} (X_i X_j + Y_i Y_j)$ \\
+        Cantidad Conservada & Ninguna & Peso de Hamming ($\sum_{i=1}^N Z_i$) \\
+        Espacio de Búsqueda Exploratorio & Espacio completo $2^N$ & Subespacio factible de Dicke $\binom{N}{K}$ \\
+        Tratamiento de Cardinalidad $K$ & Penalización cuadrática $P$ & Confinamiento geométrico nativo \\
+        Susceptibilidad a Mesetas Estériles & Elevada (gradiente nulo exponencial) & Mitigada por reducción dimensional \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+% ==============================================================================
+% 4.4. ESTABILIZACIÓN DEL PAISAJE DE OPTIMIZACIÓN CLÁSICA
+% ==============================================================================
+\section{Estabilización del Paisaje de Optimización Clásica}
+\label{sec:estabilizacion_optimizacion}
+
+\subsection{Trotterized Quantum Annealing (TQA)}
+\label{subsec:tqa_inicializacion}
+
+A pesar de que el operador $XY$ confina la exploración al subespacio de soluciones válidas, el paisaje de energía sobre el que opera el optimizador clásico $(\boldsymbol{\gamma}, \boldsymbol{\beta})$ puede seguir presentando múltiples mínimos locales no deseados si se recurre a inicializaciones aleatorias. Para proporcionar un punto de partida variacional próximo al óptimo global, se implementa una estrategia de inicialización basada en \textit{Trotterized Quantum Annealing} (TQA) \cite{Hadfield2019}.
+
+La formulación TQA discretiza la evolución temporal continua de un recocido cuántico adiabático de duración total $\Delta t$ a lo largo de $p$ pasos temporales lineales, asignando los ángulos iniciales de acuerdo con el esquema:
+\begin{equation}
+    \gamma_m^{\text{TQA}} = \left( \frac{m - 0.5}{p} \right) \Delta t, \qquad \beta_m^{\text{TQA}} = \left( 1 - \frac{m - 0.5}{p} \right) \Delta t, \qquad m = 1, \dots, p
+    \label{eq:tqa_schedule}
+\end{equation}
+El parámetro escalar $\Delta t > 0$ modula la velocidad de la evolución adiabática. Mediante un barrido unidimensional sobre un conjunto discreto de valores de prueba para $\Delta t$, se selecciona el ancla $\boldsymbol{\theta}^{\text{TQA}} = (\boldsymbol{\gamma}^{\text{TQA}}, \boldsymbol{\beta}^{\text{TQA}})$ que proporcione el valor mínimo de la energía esperada antes de activar el optimizador clásico local. De este modo, TQA no sustituye al bucle variacional, sino que actúa como una rampa de aproximación adiabática que sitúa al optimizador clásico en la cuenca de atracción del estado fundamental.
+
+\subsection{Regularización Ridge $L_2$}
+\label{subsec:regularizacion_ridge}
+
+Para blindar la optimización clásica frente a la dispersión provocada por el ruido estadístico de muestreo en circuitos variacionales, se introduce una función de pérdida regularizada continua de tipo Ridge ($L_2$) en la CPU:
+\begin{equation}
+    \mathcal{L}_{\text{Ridge}}(\boldsymbol{\theta}) = \langle H_P \rangle_{\boldsymbol{\theta}} + \alpha \sum_{k=1}^{2p} \left( \theta_k - \theta_k^{\text{TQA}} \right)^2
+    \label{eq:ridge_regularizacion}
+\end{equation}
+donde $\langle H_P \rangle_{\boldsymbol{\theta}} = \langle \psi(\boldsymbol{\theta}) | H_P | \psi(\boldsymbol{\theta}) \rangle$ es el valor esperado de la energía del circuito y $\alpha \ge 0$ representa el hiperparámetro de regularización.
+
+Desde una perspectiva geométrica, el término cuadrático adiciona una curvatura convexa local alrededor del ancla adiabática $\boldsymbol{\theta}^{\text{TQA}}$. Como ilustra la Figura~\ref{fig:paisaje_ridge}, esta penalización actúa como un filtro de suavizado que amortigua los valles de coste rugosos y previene que optimizadores locales converjan hacia mínimos locales espurios distantes del comportamiento adiabático.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{output/figures_tfm/4.MarcoTeorico/paisaje_regularizacion_ridge.png}
+    \caption{Efecto analítico de la regularización Ridge $L_2$ en el paisaje de energía de la función de coste. A la izquierda, un paisaje altamente rugoso característico de las inicializaciones no regularizadas; a la derecha, la superficie suavizada que previene el atrapamiento en mínimos locales.}
+    \label{fig:paisaje_ridge}
+\end{figure}
+
+El ajuste de $\alpha$ impone un compromiso analítico entre sesgo y varianza: valores excesivamente altos de $\alpha$ anclan rígidamente los parámetros a la rampa TQA limitando la flexibilidad variacional del circuito, mientras que valores cercanos a cero anulan el efecto protector frente a la rugosidad energética.
+
+La cuantificación experimental de esta reducción en la variabilidad del bucle clásico, evaluada a través de la desviación estándar del \textit{Optimization GAP} entre distintas semillas aleatorias, se detalla en el Capítulo~\ref{cap:evaluacion_resultados} en relación directa con el Objetivo Específico OE3.
+
+% ==============================================================================
+% 4.5. SÍNTESIS Y TRANSICIÓN AL CAPÍTULO 5
+% ==============================================================================
+\section{Síntesis y Transición al Marco Experimental}
+\label{sec:sintesis_marco_teorico}
+
+A lo largo de este capítulo se ha establecido el marco matemático unificado del proyecto, articulando: (i) el mapeo deductivo de carteras de Markowitz a Hamiltonianos de espín de Ising, (ii) el confinamiento de la búsqueda combinatoria mediante estados de Dicke y operadores mezcladores $XY$ con preservación de peso de Hamming, y (iii) la estabilización del bucle clásico a través del esquema bicapa TQA + Ridge $L_2$.
+
+Habiendo formalizado el sustento analítico general, el Capítulo~\ref{cap:marco_experimental} traduce cada uno de estos elementos teóricos en un protocolo experimental y de ingeniería de software directamente reproducible. Concretamente:
+\begin{itemize}
+    \item La Sección~\ref{sec:ingesta_datos_mercado} detalla la procedencia de las series temporales de renta variable, el cálculo de los retornos logarítmicos continuos y la estimación de las matrices $\mu$ y $\Sigma$.
+    \item La Sección~\ref{sec:justificacion_hiperparametros} justifica cuantitativamente la selección de los hiperparámetros financieros y computacionales ($N$, $K$, $\lambda$, $p$, $P$ y $\alpha$).
+    \item La Sección~\ref{sec:arquitectura_software} describe el diseño modular del repositorio, la integración de la librería \texttt{Qrisp} para la síntesis de compuertas cuánticas y la parametrización de los solucionadores de referencia clásicos (Gurobi Optimizer y Simulated Annealing).
+\end{itemize}

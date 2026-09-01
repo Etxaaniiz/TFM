@@ -490,6 +490,14 @@ def generate_plot_3_1(df_returns, output_dir, use_qrisp, test_mode):
             cost_op = create_QUBO_cost_operator(Q)
             qaoa_prob = QAOAProblem(cost_op, RX_mixer, create_QUBO_cl_cost_function(Q))
             res = qaoa_prob.run(qv, depth=p, max_iter=2 if test_mode else 30, mes_kwargs={"shots": 2048})
+            # Para ejecutar con el emulador puro NumPy (classical_emulators.py):
+            # from src.quantum.classical_emulators import solve_qaoa_pure_numpy, QuantumStatevectorSimulator
+            # inst = {'N': N, 'K': K, 'mu': mu.to_numpy(), 'Sigma': Sigma.to_numpy(), 'Q': Q, 'dataset': 'feasibility', 'instance_id': 0, 'seed': 42}
+            # np_res = solve_qaoa_pure_numpy(inst, p=p, mixer="rx", maxiter=2 if test_mode else 30)
+            # sim = QuantumStatevectorSimulator(N, K, Q)
+            # _, probs = sim.simulate_qaoa(p, np_res["optimal_angles"], mixer="rx")
+            # res = {bin(i)[2:].zfill(N): probs[i] for i in range(2**N)}
+
             feas_prob = 0.0
             for bstring, count in res.items():
                 if bstring.count('1') == K:
