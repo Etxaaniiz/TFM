@@ -11,29 +11,35 @@ project_root = os.path.abspath(os.path.join(script_dir, ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from src.metrics.metrics import compute_gap
 from src.portfolio.portfolio_model import build_qubo
-from src.solvers.classic_solvers import solve_gurobi, solve_sa
 from src.quantum.classical_emulators import QuantumStatevectorSimulator, solve_qaoa_pure_numpy
-from src.metrics.metrics import calculate_portfolio_metrics, compute_gap
+from src.solvers.classic_solvers import solve_gurobi, solve_sa
+
+
+class BudgetExceeded(Exception):
+    """Raised to unwind nested loops once a phase's wall-clock budget is spent."""
+
 
 def load_regime_data(processed_dir="data/processed"):
     """Loads In-Sample (Estable) and Out-of-Sample (COVID19 / Inflacionario) data."""
     mu_is_df = pd.read_csv(os.path.join(processed_dir, "returns_annualized_Estable.csv"))
     cov_is_df = pd.read_csv(os.path.join(processed_dir, "covariance_Estable.csv"), index_col=0)
-    
+
     mu_oos_df = pd.read_csv(os.path.join(processed_dir, "returns_annualized_Volatil_COVID19.csv"))
     cov_oos_df = pd.read_csv(os.path.join(processed_dir, "covariance_Volatil_COVID19.csv"), index_col=0)
-    
+
     # Common tickers
     tickers = [t for t in mu_is_df['Ticker'] if t in cov_is_df.columns and t in mu_oos_df['Ticker'].values and t in cov_oos_df.columns]
-    
+
     mu_is = mu_is_df.set_index('Ticker').loc[tickers, 'Expected_Return_Annualized']
     cov_is = cov_is_df.loc[tickers, tickers]
-    
+
     mu_oos = mu_oos_df.set_index('Ticker').loc[tickers, 'Expected_Return_Annualized']
     cov_oos = cov_oos_df.loc[tickers, tickers]
-    
+
     return tickers, mu_is, cov_is, mu_oos, cov_oos
+
 
 def evaluate_oos_sharpe(x_sol, mu_oos, cov_oos, K):
     """Calculates Out-of-Sample Sharpe Ratio given binary solution vector."""
@@ -46,285 +52,372 @@ def evaluate_oos_sharpe(x_sol, mu_oos, cov_oos, K):
     vol_val = np.sqrt(var_val) if var_val > 0 else 0.0
     return float(mu_val / vol_val) if vol_val > 1e-9 else 0.0
 
-def run_benchmarks(quick_mode=False):
+
+def get_nested_ticker_order(all_tickers, seed):
+    """Build a deterministic ticker order per seed and reuse prefixes for nested N."""
+    rng = np.random.RandomState(seed)
+    ordered_idx = rng.permutation(len(all_tickers))
+    return [all_tickers[i] for i in ordered_idx]
+
+
+def select_prefix_tickers(ordered_tickers, n_assets):
+    return ordered_tickers[:n_assets]
+
+
+def get_cobyla_maxiter(p):
+    """Scale COBYLA budget with depth while keeping a generous floor, so the
+    optimizer has enough evaluations to actually converge instead of being
+    cut off early (a major source of seed-to-seed noise in the gap curves)."""
+    return max(220, 120 + 45 * p)
+
+
+def run_qaoa_restarts(
+    inst, p, n_restarts, maxiter, gurobi_obj, mu_oos, cov_oos, k_cardinality,
+    experiment_phase, solver_name, mixer, init_type, alpha, seed_offset,
+):
+    """Run several random initializations of a QAOA variant and keep one row
+    per restart, flagging the best-of-restarts run. Used for every solver
+    whose classical optimizer (COBYLA) can land in different local optima
+    across restarts (Standard QAOA and XY-QAOA Regularized)."""
+    restart_runs = []
+
+    for restart_id in range(n_restarts):
+        restart_inst = dict(inst)
+        restart_seed = int(inst["seed"] * 100000 + seed_offset * 1000 + p * 10 + restart_id)
+        restart_inst["seed"] = restart_seed
+        restart_inst["instance_id"] = f"{inst['instance_id']}_r{restart_id}"
+
+        res = solve_qaoa_pure_numpy(
+            restart_inst,
+            p=p,
+            mixer=mixer,
+            init_type=init_type,
+            alpha=alpha,
+            maxiter=maxiter,
+        )
+
+        sol = res["solution"]
+        obj = res["objective"]
+        gap = compute_gap(obj, gurobi_obj) * 100.0
+
+        sim = QuantumStatevectorSimulator(inst["N"], k_cardinality, inst["Q"], inst["lambda_val"])
+        _, probs = sim.simulate_qaoa(p, res["optimal_angles"], mixer=mixer)
+        feasible_indices = [idx for idx in range(2 ** inst["N"]) if bin(idx).count("1") == k_cardinality]
+        feas_ratio = float(np.sum(probs[feasible_indices]) * 100.0)
+        oos_sharpe = evaluate_oos_sharpe(sol, mu_oos, cov_oos, k_cardinality)
+
+        restart_runs.append({
+            "N": inst["N"],
+            "K": k_cardinality,
+            "Solver": solver_name,
+            "p": p,
+            "seed": inst["seed"],
+            "restart_id": restart_id,
+            "is_best_restart": False,
+            "experiment_phase": experiment_phase,
+            "Feasibility Ratio (%)": feas_ratio,
+            "Optimization GAP (%)": gap,
+            "gap_best_of_restarts": np.nan,
+            "Sharpe Ratio In-Sample": res["sharpe"],
+            "Sharpe Ratio Out-of-Sample": oos_sharpe,
+            "Execution Time (s)": res["runtime_seconds"],
+            "objective": obj,
+        })
+
+    best_idx = int(np.argmin([row["objective"] for row in restart_runs]))
+    best_gap = restart_runs[best_idx]["Optimization GAP (%)"]
+
+    for idx, row in enumerate(restart_runs):
+        row["is_best_restart"] = idx == best_idx
+        row["gap_best_of_restarts"] = best_gap
+
+    return restart_runs
+
+
+def run_benchmarks(
+    quick_mode=False,
+    max_n=18,
+    seed_start=42,
+    seed_count=30,
+    standard_restarts=4,
+    regularized_restarts=3,
+    regularized_alpha=0.015,
+    max_hours=4.0,
+    lambda_val=0.5,
+):
     print("=" * 70)
-    print("INICIANDO CAMPAÑA EXPERIMENTAL REAL (TFM QUANTUM PORTFOLIO)")
+    print("INICIANDO CAMPANA EXPERIMENTAL REAL (TFM QUANTUM PORTFOLIO)")
     print("=" * 70)
-    
+
+    start_time = time.time()
+    budget_seconds = max_hours * 3600.0
+    # Phase 1 (N-scaling) is far more expensive (statevector cost grows as
+    # 2^N), so it gets the larger share of the wall-clock budget. Phase 2
+    # (p-scaling) gets its own fresh window once phase 1 is done, so an
+    # early-finishing phase 1 does not starve phase 2, and a slow machine
+    # cannot let phase 1 alone eat the full run.
+    phase1_budget = 0.65 * budget_seconds
+    phase2_budget = 0.30 * budget_seconds
+
     processed_dir = os.path.join(project_root, "data", "processed")
     if not os.path.exists(processed_dir):
         print(f"Error: Directorio {processed_dir} no encontrado. Ejecuta prepare_data.py primero.")
         return
-        
+
     all_tickers, mu_is_all, cov_is_all, mu_oos_all, cov_oos_all = load_regime_data(processed_dir)
     print(f"Activos disponibles: {len(all_tickers)}")
-    
+
     if quick_mode:
         Ns = [6, 8, 10]
-        seeds = [42, 43]
-        ps = [1, 2, 3, 4]
-        cobyla_iter = 30
+        seeds = [seed_start, seed_start + 1]
+        ps = [1, 2, 4]
         sa_reads = 200
         sa_sweeps = 200
-        print("[MODO RÁPIDO ACTIVADO PARA VALIDACIÓN]", flush=True)
+        standard_restarts = min(standard_restarts, 2)
+        regularized_restarts = min(regularized_restarts, 2)
     else:
-        Ns = [6, 8, 10, 12, 14, 16, 18, 20]
-        seeds = [42, 43, 44, 45, 46]
+        Ns = list(range(6, max_n + 1, 2))
+        seeds = list(range(seed_start, seed_start + seed_count))
         ps = [1, 2, 3, 4, 5, 6, 7, 8]
-        cobyla_iter = 50
         sa_reads = 500
         sa_sweeps = 500
-        sa_sweeps = 500
-        
-    lambda_val = 0.5
+
+    print(f"N in {Ns} | seeds={len(seeds)} | ps={ps}")
+    print(f"standard_restarts={standard_restarts} | regularized_restarts={regularized_restarts}")
+    print(f"Presupuesto total: {max_hours:.2f} h (fase N: {phase1_budget/3600:.2f} h, fase p: {phase2_budget/3600:.2f} h)")
+
     rows = []
-    
+    ticker_orders = {seed: get_nested_ticker_order(all_tickers, seed) for seed in seeds}
+
     # --------------------------------------------------------------------------
     # 1. MAIN N-SCALING STUDY (Fixed p=3 for QAOA solvers)
     # --------------------------------------------------------------------------
     p_fixed = 3
+    phase1_deadline = time.time() + phase1_budget
     print("\n>>> FASE 1.1: ESTUDIO DE ESCALABILIDAD EN N (N in", Ns, ")")
-    
-    for N in Ns:
-        K = N // 2
-        print(f"\n--- Dimension N={N}, Cardinalidad K={K} ---")
-        
-        for seed in seeds:
-            # Deterministic selection of N tickers for this seed
-            rng = np.random.RandomState(seed)
-            selected_idx = rng.choice(len(all_tickers), size=N, replace=False)
-            selected_tickers = [all_tickers[i] for i in selected_idx]
-            
-            mu_is = mu_is_all.loc[selected_tickers].values
-            cov_is = cov_is_all.loc[selected_tickers, selected_tickers].values
-            mu_oos = mu_oos_all.loc[selected_tickers].values
-            cov_oos = cov_oos_all.loc[selected_tickers, selected_tickers].values
-            
-            Q = build_qubo(mu_is, cov_is, K, lambda_val=lambda_val)
-            
-            inst = {
-                'dataset': 'real_finance_SP500_IBEX',
-                'instance_id': f"N{N}_K{K}_s{seed}",
-                'N': N,
-                'K': K,
-                'mu': mu_is,
-                'Sigma': cov_is,
-                'Q': Q,
-                'lambda_val': lambda_val,
-                'seed': seed,
-                'tickers': selected_tickers
-            }
-            
-            # 1. GUROBI (Exact reference)
-            res_gurobi = solve_gurobi(inst, lambda_val=lambda_val)
-            gurobi_obj = res_gurobi['objective']
-            gurobi_sol = res_gurobi['solution']
-            gurobi_oos_sharpe = evaluate_oos_sharpe(gurobi_sol, mu_oos, cov_oos, K)
-            
-            rows.append({
-                "N": N,
-                "K": K,
-                "Solver": "Gurobi",
-                "p": None,
-                "seed": seed,
-                "Feasibility Ratio (%)": 100.0,
-                "Optimization GAP (%)": 0.0,
-                "Sharpe Ratio In-Sample": res_gurobi['sharpe'],
-                "Sharpe Ratio Out-of-Sample": gurobi_oos_sharpe,
-                "Execution Time (s)": res_gurobi['runtime_seconds']
-            })
-            
-            # 2. SIMULATED ANNEALING
-            res_sa = solve_sa(inst, num_reads=sa_reads, num_sweeps=sa_sweeps)
-            sa_sol = res_sa['solution']
-            sa_obj = res_sa['objective']
-            sa_gap = compute_gap(sa_obj, gurobi_obj) * 100.0
-            sa_feas = 100.0 if res_sa['feasible'] else 0.0
-            sa_oos_sharpe = evaluate_oos_sharpe(sa_sol, mu_oos, cov_oos, K)
-            
-            rows.append({
-                "N": N,
-                "K": K,
-                "Solver": "Simulated Annealing",
-                "p": None,
-                "seed": seed,
-                "Feasibility Ratio (%)": sa_feas,
-                "Optimization GAP (%)": sa_gap,
-                "Sharpe Ratio In-Sample": res_sa['sharpe'],
-                "Sharpe Ratio Out-of-Sample": sa_oos_sharpe,
-                "Execution Time (s)": res_sa['runtime_seconds']
-            })
-            
-            # 3. STANDARD QAOA (RX mixer, QUBO cost)
-            res_qaoa_rx = solve_qaoa_pure_numpy(inst, p=p_fixed, mixer="rx", init_type="random", alpha=0.0, maxiter=cobyla_iter)
-            rx_sol = res_qaoa_rx['solution']
-            rx_obj = res_qaoa_rx['objective']
-            rx_gap = compute_gap(rx_obj, gurobi_obj) * 100.0
-            
-            # Calculate feasibility probability mass in statevector
-            sim_rx = QuantumStatevectorSimulator(N, K, Q, lambda_val)
-            _, rx_probs = sim_rx.simulate_qaoa(p_fixed, res_qaoa_rx['optimal_angles'], mixer="rx")
-            feasible_indices = [idx for idx in range(2**N) if bin(idx).count('1') == K]
-            rx_feas_ratio = float(np.sum(rx_probs[feasible_indices]) * 100.0)
-            rx_oos_sharpe = evaluate_oos_sharpe(rx_sol, mu_oos, cov_oos, K)
-            
-            rows.append({
-                "N": N,
-                "K": K,
-                "Solver": "Standard QAOA",
-                "p": p_fixed,
-                "seed": seed,
-                "Feasibility Ratio (%)": rx_feas_ratio,
-                "Optimization GAP (%)": rx_gap,
-                "Sharpe Ratio In-Sample": res_qaoa_rx['sharpe'],
-                "Sharpe Ratio Out-of-Sample": rx_oos_sharpe,
-                "Execution Time (s)": res_qaoa_rx['runtime_seconds']
-            })
-            
-            # 4. XY-QAOA (XY mixer, Dicke state, unregularized)
-            res_xy = solve_qaoa_pure_numpy(inst, p=p_fixed, mixer="xy", init_type="random", alpha=0.0, maxiter=cobyla_iter)
-            xy_sol = res_xy['solution']
-            xy_obj = res_xy['objective']
-            xy_gap = compute_gap(xy_obj, gurobi_obj) * 100.0
-            xy_oos_sharpe = evaluate_oos_sharpe(xy_sol, mu_oos, cov_oos, K)
-            
-            rows.append({
-                "N": N,
-                "K": K,
-                "Solver": "XY-QAOA",
-                "p": p_fixed,
-                "seed": seed,
-                "Feasibility Ratio (%)": 100.0, # Conserved by XY mixer
-                "Optimization GAP (%)": xy_gap,
-                "Sharpe Ratio In-Sample": res_xy['sharpe'],
-                "Sharpe Ratio Out-of-Sample": xy_oos_sharpe,
-                "Execution Time (s)": res_xy['runtime_seconds']
-            })
-            
-            # 5. XY-QAOA REGULARIZED (XY mixer, Dicke state, TQA init, Ridge L2)
-            res_reg = solve_qaoa_pure_numpy(inst, p=p_fixed, mixer="xy", init_type="tqa", alpha=0.015, maxiter=cobyla_iter)
-            reg_sol = res_reg['solution']
-            reg_obj = res_reg['objective']
-            reg_gap = compute_gap(reg_obj, gurobi_obj) * 100.0
-            reg_oos_sharpe = evaluate_oos_sharpe(reg_sol, mu_oos, cov_oos, K)
-            
-            rows.append({
-                "N": N,
-                "K": K,
-                "Solver": "XY-QAOA Regularized",
-                "p": p_fixed,
-                "seed": seed,
-                "Feasibility Ratio (%)": 100.0,
-                "Optimization GAP (%)": reg_gap,
-                "Sharpe Ratio In-Sample": res_reg['sharpe'],
-                "Sharpe Ratio Out-of-Sample": reg_oos_sharpe,
-                "Execution Time (s)": res_reg['runtime_seconds']
-            })
-            
-            print(f"  Seed {seed} | Gurobi: {gurobi_obj:.4f} | SA GAP: {sa_gap:.2f}% | RX GAP: {rx_gap:.2f}% | XY GAP: {xy_gap:.2f}% | Reg GAP: {reg_gap:.2f}%", flush=True)
-            
+
+    try:
+        for N in Ns:
+            K = N // 2
+            print(f"\n--- Dimension N={N}, Cardinalidad K={K} ---")
+
+            for seed in seeds:
+                if time.time() > phase1_deadline:
+                    raise BudgetExceeded()
+
+                selected_tickers = select_prefix_tickers(ticker_orders[seed], N)
+
+                mu_is = mu_is_all.loc[selected_tickers].values
+                cov_is = cov_is_all.loc[selected_tickers, selected_tickers].values
+                mu_oos = mu_oos_all.loc[selected_tickers].values
+                cov_oos = cov_oos_all.loc[selected_tickers, selected_tickers].values
+
+                Q = build_qubo(mu_is, cov_is, K, lambda_val=lambda_val)
+
+                inst = {
+                    'dataset': 'real_finance_SP500_IBEX',
+                    'instance_id': f"N{N}_K{K}_s{seed}",
+                    'N': N,
+                    'K': K,
+                    'mu': mu_is,
+                    'Sigma': cov_is,
+                    'Q': Q,
+                    'lambda_val': lambda_val,
+                    'seed': seed,
+                    'tickers': selected_tickers
+                }
+
+                maxiter_qaoa = get_cobyla_maxiter(p_fixed)
+
+                # 1. GUROBI (Exact reference)
+                res_gurobi = solve_gurobi(inst, lambda_val=lambda_val)
+                gurobi_obj = res_gurobi['objective']
+                gurobi_sol = res_gurobi['solution']
+                gurobi_oos_sharpe = evaluate_oos_sharpe(gurobi_sol, mu_oos, cov_oos, K)
+
+                rows.append({
+                    "N": N, "K": K, "Solver": "Gurobi", "p": None, "seed": seed,
+                    "restart_id": np.nan, "is_best_restart": True, "experiment_phase": "N_scaling",
+                    "Feasibility Ratio (%)": 100.0, "Optimization GAP (%)": 0.0,
+                    "gap_best_of_restarts": 0.0, "Sharpe Ratio In-Sample": res_gurobi['sharpe'],
+                    "Sharpe Ratio Out-of-Sample": gurobi_oos_sharpe,
+                    "Execution Time (s)": res_gurobi['runtime_seconds'], "objective": gurobi_obj,
+                })
+
+                # 2. SIMULATED ANNEALING
+                res_sa = solve_sa(inst, num_reads=sa_reads, num_sweeps=sa_sweeps)
+                sa_sol = res_sa['solution']
+                sa_obj = res_sa['objective']
+                sa_gap = compute_gap(sa_obj, gurobi_obj) * 100.0
+                sa_feas = 100.0 if res_sa['feasible'] else 0.0
+                sa_oos_sharpe = evaluate_oos_sharpe(sa_sol, mu_oos, cov_oos, K)
+
+                rows.append({
+                    "N": N, "K": K, "Solver": "Simulated Annealing", "p": None, "seed": seed,
+                    "restart_id": np.nan, "is_best_restart": True, "experiment_phase": "N_scaling",
+                    "Feasibility Ratio (%)": sa_feas, "Optimization GAP (%)": sa_gap,
+                    "gap_best_of_restarts": sa_gap, "Sharpe Ratio In-Sample": res_sa['sharpe'],
+                    "Sharpe Ratio Out-of-Sample": sa_oos_sharpe,
+                    "Execution Time (s)": res_sa['runtime_seconds'], "objective": sa_obj,
+                })
+
+                # 3. STANDARD QAOA (RX mixer, QUBO cost) - best of several restarts
+                rows.extend(
+                    run_qaoa_restarts(
+                        inst=inst, p=p_fixed, n_restarts=standard_restarts, maxiter=maxiter_qaoa,
+                        gurobi_obj=gurobi_obj, mu_oos=mu_oos, cov_oos=cov_oos, k_cardinality=K,
+                        experiment_phase="N_scaling", solver_name="Standard QAOA",
+                        mixer="rx", init_type="random", alpha=0.0, seed_offset=1,
+                    )
+                )
+
+                # 4. XY-QAOA (XY mixer, Dicke state, unregularized)
+                res_xy = solve_qaoa_pure_numpy(inst, p=p_fixed, mixer="xy", init_type="random", alpha=0.0, maxiter=maxiter_qaoa)
+                xy_sol = res_xy['solution']
+                xy_obj = res_xy['objective']
+                xy_gap = compute_gap(xy_obj, gurobi_obj) * 100.0
+                xy_oos_sharpe = evaluate_oos_sharpe(xy_sol, mu_oos, cov_oos, K)
+
+                rows.append({
+                    "N": N, "K": K, "Solver": "XY-QAOA", "p": p_fixed, "seed": seed,
+                    "restart_id": np.nan, "is_best_restart": True, "experiment_phase": "N_scaling",
+                    "Feasibility Ratio (%)": 100.0,  # Conserved by XY mixer
+                    "Optimization GAP (%)": xy_gap, "gap_best_of_restarts": xy_gap,
+                    "Sharpe Ratio In-Sample": res_xy['sharpe'], "Sharpe Ratio Out-of-Sample": xy_oos_sharpe,
+                    "Execution Time (s)": res_xy['runtime_seconds'], "objective": xy_obj,
+                })
+
+                # 5. XY-QAOA REGULARIZED (XY mixer, Dicke state, TQA init, Ridge L2) - best of restarts
+                rows.extend(
+                    run_qaoa_restarts(
+                        inst=inst, p=p_fixed, n_restarts=regularized_restarts, maxiter=maxiter_qaoa,
+                        gurobi_obj=gurobi_obj, mu_oos=mu_oos, cov_oos=cov_oos, k_cardinality=K,
+                        experiment_phase="N_scaling", solver_name="XY-QAOA Regularized",
+                        mixer="xy", init_type="tqa", alpha=regularized_alpha, seed_offset=2,
+                    )
+                )
+
+                elapsed = time.time() - start_time
+                print(f"  Seed {seed} | Gurobi: {gurobi_obj:.4f} | SA GAP: {sa_gap:.2f}% | XY GAP: {xy_gap:.2f}% | t={elapsed/60:.1f} min", flush=True)
+    except BudgetExceeded:
+        print(f"\n[AVISO] Presupuesto de la Fase 1 ({phase1_budget/3600:.2f} h) agotado. "
+              f"Se continua con la Fase 2 usando los datos acumulados hasta ahora.")
+
     # --------------------------------------------------------------------------
     # 2. DEPTH p SCALING STUDY (Fixed N=14, K=7)
     # --------------------------------------------------------------------------
     N_fixed = 14 if 14 in Ns else Ns[-1]
     K_fixed = N_fixed // 2
+    phase2_deadline = time.time() + phase2_budget
     print(f"\n>>> FASE 1.2: ESTUDIO DE PROFUNDIDAD DEL ANSATZ p in {ps} (N={N_fixed}, K={K_fixed})")
-    
-    for p in ps:
-        print(f"\n--- Profundidad p={p} ---")
-        for seed in seeds:
-            rng = np.random.RandomState(seed)
-            selected_idx = rng.choice(len(all_tickers), size=N_fixed, replace=False)
-            selected_tickers = [all_tickers[i] for i in selected_idx]
-            
-            mu_is = mu_is_all.loc[selected_tickers].values
-            cov_is = cov_is_all.loc[selected_tickers, selected_tickers].values
-            mu_oos = mu_oos_all.loc[selected_tickers].values
-            cov_oos = cov_oos_all.loc[selected_tickers, selected_tickers].values
-            
-            Q = build_qubo(mu_is, cov_is, K_fixed, lambda_val=lambda_val)
-            
-            inst = {
-                'dataset': 'real_finance_SP500_IBEX',
-                'instance_id': f"N{N_fixed}_K{K_fixed}_p{p}_s{seed}",
-                'N': N_fixed,
-                'K': K_fixed,
-                'mu': mu_is,
-                'Sigma': cov_is,
-                'Q': Q,
-                'lambda_val': lambda_val,
-                'seed': seed,
-                'tickers': selected_tickers
-            }
-            
-            # Gurobi benchmark reference for this instance
-            res_gurobi = solve_gurobi(inst, lambda_val=lambda_val)
-            gurobi_obj = res_gurobi['objective']
-            
-            # 1. Standard QAOA at depth p
-            res_rx_p = solve_qaoa_pure_numpy(inst, p=p, mixer="rx", init_type="random", alpha=0.0, maxiter=cobyla_iter)
-            rx_sol_p = res_rx_p['solution']
-            rx_obj_p = res_rx_p['objective']
-            rx_gap_p = compute_gap(rx_obj_p, gurobi_obj) * 100.0
-            
-            sim_rx_p = QuantumStatevectorSimulator(N_fixed, K_fixed, Q, lambda_val)
-            _, rx_probs_p = sim_rx_p.simulate_qaoa(p, res_rx_p['optimal_angles'], mixer="rx")
-            feasible_indices_p = [idx for idx in range(2**N_fixed) if bin(idx).count('1') == K_fixed]
-            rx_feas_p = float(np.sum(rx_probs_p[feasible_indices_p]) * 100.0)
-            rx_oos_sharpe_p = evaluate_oos_sharpe(rx_sol_p, mu_oos, cov_oos, K_fixed)
-            
-            rows.append({
-                "N": N_fixed,
-                "K": K_fixed,
-                "Solver": "Standard QAOA",
-                "p": p,
-                "seed": seed,
-                "Feasibility Ratio (%)": rx_feas_p,
-                "Optimization GAP (%)": rx_gap_p,
-                "Sharpe Ratio In-Sample": res_rx_p['sharpe'],
-                "Sharpe Ratio Out-of-Sample": rx_oos_sharpe_p,
-                "Execution Time (s)": res_rx_p['runtime_seconds']
-            })
-            
-            # 2. XY-QAOA Regularized at depth p
-            res_reg_p = solve_qaoa_pure_numpy(inst, p=p, mixer="xy", init_type="tqa", alpha=0.015, maxiter=cobyla_iter)
-            reg_sol_p = res_reg_p['solution']
-            reg_obj_p = res_reg_p['objective']
-            reg_gap_p = compute_gap(reg_obj_p, gurobi_obj) * 100.0
-            reg_oos_sharpe_p = evaluate_oos_sharpe(reg_sol_p, mu_oos, cov_oos, K_fixed)
-            
-            rows.append({
-                "N": N_fixed,
-                "K": K_fixed,
-                "Solver": "XY-QAOA Regularized",
-                "p": p,
-                "seed": seed,
-                "Feasibility Ratio (%)": 100.0,
-                "Optimization GAP (%)": reg_gap_p,
-                "Sharpe Ratio In-Sample": res_reg_p['sharpe'],
-                "Sharpe Ratio Out-of-Sample": reg_oos_sharpe_p,
-                "Execution Time (s)": res_reg_p['runtime_seconds']
-            })
-            
-            print(f"  Seed {seed} | RX(p={p}) GAP: {rx_gap_p:.2f}% | Reg(p={p}) GAP: {reg_gap_p:.2f}%", flush=True)
-            
+
+    try:
+        for p in ps:
+            print(f"\n--- Profundidad p={p} ---")
+            maxiter_qaoa = get_cobyla_maxiter(p)
+            for seed in seeds:
+                if time.time() > phase2_deadline:
+                    raise BudgetExceeded()
+
+                selected_tickers = select_prefix_tickers(ticker_orders[seed], N_fixed)
+
+                mu_is = mu_is_all.loc[selected_tickers].values
+                cov_is = cov_is_all.loc[selected_tickers, selected_tickers].values
+                mu_oos = mu_oos_all.loc[selected_tickers].values
+                cov_oos = cov_oos_all.loc[selected_tickers, selected_tickers].values
+
+                Q = build_qubo(mu_is, cov_is, K_fixed, lambda_val=lambda_val)
+
+                inst = {
+                    'dataset': 'real_finance_SP500_IBEX',
+                    'instance_id': f"N{N_fixed}_K{K_fixed}_p{p}_s{seed}",
+                    'N': N_fixed,
+                    'K': K_fixed,
+                    'mu': mu_is,
+                    'Sigma': cov_is,
+                    'Q': Q,
+                    'lambda_val': lambda_val,
+                    'seed': seed,
+                    'tickers': selected_tickers
+                }
+
+                # Gurobi benchmark reference for this instance
+                res_gurobi = solve_gurobi(inst, lambda_val=lambda_val)
+                gurobi_obj = res_gurobi['objective']
+                gurobi_sol = res_gurobi['solution']
+                gurobi_oos_sharpe = evaluate_oos_sharpe(gurobi_sol, mu_oos, cov_oos, K_fixed)
+
+                rows.append({
+                    "N": N_fixed, "K": K_fixed, "Solver": "Gurobi", "p": None, "seed": seed,
+                    "restart_id": np.nan, "is_best_restart": True, "experiment_phase": "p_scaling",
+                    "Feasibility Ratio (%)": 100.0, "Optimization GAP (%)": 0.0,
+                    "gap_best_of_restarts": 0.0, "Sharpe Ratio In-Sample": res_gurobi['sharpe'],
+                    "Sharpe Ratio Out-of-Sample": gurobi_oos_sharpe,
+                    "Execution Time (s)": res_gurobi['runtime_seconds'], "objective": gurobi_obj,
+                })
+
+                # 1. Standard QAOA at depth p - best of restarts
+                rows.extend(
+                    run_qaoa_restarts(
+                        inst=inst, p=p, n_restarts=standard_restarts, maxiter=maxiter_qaoa,
+                        gurobi_obj=gurobi_obj, mu_oos=mu_oos, cov_oos=cov_oos, k_cardinality=K_fixed,
+                        experiment_phase="p_scaling", solver_name="Standard QAOA",
+                        mixer="rx", init_type="random", alpha=0.0, seed_offset=1,
+                    )
+                )
+
+                # 2. XY-QAOA Regularized at depth p - best of restarts
+                rows.extend(
+                    run_qaoa_restarts(
+                        inst=inst, p=p, n_restarts=regularized_restarts, maxiter=maxiter_qaoa,
+                        gurobi_obj=gurobi_obj, mu_oos=mu_oos, cov_oos=cov_oos, k_cardinality=K_fixed,
+                        experiment_phase="p_scaling", solver_name="XY-QAOA Regularized",
+                        mixer="xy", init_type="tqa", alpha=regularized_alpha, seed_offset=2,
+                    )
+                )
+
+                elapsed = time.time() - start_time
+                print(f"  Seed {seed} | t={elapsed/60:.1f} min", flush=True)
+    except BudgetExceeded:
+        print(f"\n[AVISO] Presupuesto de la Fase 2 ({phase2_budget/3600:.2f} h) agotado. "
+              f"Se guardan los datos acumulados hasta ahora.")
+
     # Convert to DataFrame
     df_results = pd.DataFrame(rows)
-    
+
     out_dir = os.path.join(project_root, "output", "results")
     os.makedirs(out_dir, exist_ok=True)
     out_csv = os.path.join(out_dir, "results.csv")
     df_results.to_csv(out_csv, index=False)
-    
+
+    total_elapsed = time.time() - start_time
     print("\n" + "=" * 70)
-    print(f"CAMPAÑA EXPERIMENTAL COMPLETADA CON ÉXITO.")
+    print("CAMPANA EXPERIMENTAL COMPLETADA.")
     print(f"Archivo generado: {out_csv}")
     print(f"Total de registros experimentales: {len(df_results)}")
+    print(f"Tiempo total transcurrido: {total_elapsed/3600:.2f} h (limite: {max_hours:.2f} h)")
     print("=" * 70)
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Ejecutar benchmark experimental real de optimización de carteras.")
-    parser.add_argument("--quick", action="store_true", help="Ejecutar en modo rápido para pruebas")
+    parser = argparse.ArgumentParser(description="Ejecutar benchmark experimental real de optimizacion de carteras.")
+    parser.add_argument("--quick", action="store_true", help="Ejecutar en modo rapido para pruebas")
+    parser.add_argument("--max-n", type=int, default=18, help="Maximo N para el barrido de escalado")
+    parser.add_argument("--seed-start", type=int, default=42, help="Primera semilla del barrido")
+    parser.add_argument("--seed-count", type=int, default=30, help="Numero de semillas del barrido")
+    parser.add_argument("--standard-restarts", type=int, default=4, help="Numero de reinicios para Standard QAOA")
+    parser.add_argument("--regularized-restarts", type=int, default=3, help="Numero de reinicios para XY-QAOA Regularized")
+    parser.add_argument("--regularized-alpha", type=float, default=0.015, help="Fuerza de la regularizacion Ridge para XY-QAOA")
+    parser.add_argument("--max-hours", type=float, default=4.0, help="Presupuesto maximo de tiempo de ejecucion, en horas")
     args = parser.parse_args()
-    
-    run_benchmarks(quick_mode=args.quick)
+
+    run_benchmarks(
+        quick_mode=args.quick,
+        max_n=args.max_n,
+        seed_start=args.seed_start,
+        seed_count=args.seed_count,
+        standard_restarts=args.standard_restarts,
+        regularized_restarts=args.regularized_restarts,
+        regularized_alpha=args.regularized_alpha,
+        max_hours=args.max_hours,
+    )

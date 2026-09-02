@@ -48,7 +48,7 @@ def main():
     
     # Define market regimes for stress-testing
     regimes = {
-        'Estable': ('2017-01-01', '2019-12-31'),
+        'Estable': ('2019-01-01', '2019-12-31'),
         'Volatil_COVID19': ('2020-01-01', '2020-12-31'),
         'Inflacionario': ('2022-01-01', '2023-12-31')
     }

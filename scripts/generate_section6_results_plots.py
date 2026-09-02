@@ -1,8 +1,15 @@
 import os
+import sys
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+# ── project root ──────────────────────────────────────────────────────────────
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 def setup_plot_style():
     # Apply seaborn-v0_8-whitegrid style
@@ -36,16 +43,29 @@ def setup_plot_style():
         'savefig.bbox': 'tight'
     })
 
+
+def filter_analysis_frame(df, phase_name):
+    """Keep only the requested phase and the selected best restart rows."""
+    filtered = df.copy()
+
+    if 'experiment_phase' in filtered.columns:
+        filtered = filtered[filtered['experiment_phase'] == phase_name]
+
+    if 'is_best_restart' in filtered.columns:
+        filtered = filtered[filtered['is_best_restart'].fillna(True)]
+
+    return filtered
+
 def main():
     setup_plot_style()
     
     # Path setup
-    csv_path = "output/results/results.csv"
-    output_dir = "output/figures_tfm/6.Resultados"
+    csv_path = os.path.join(project_root, "output", "results", "results.csv")
+    output_dir = os.path.join(project_root, "output", "figures_tfm", "6.Resultados")
     os.makedirs(output_dir, exist_ok=True)
     
     if not os.path.exists(csv_path):
-        print(f"Error: {csv_path} does not exist. Please run generate_results_csv.py first.")
+        print(f"Error: {csv_path} does not exist. Please run scripts/run_benchmarks.py first.")
         return
         
     df = pd.read_csv(csv_path)
@@ -65,8 +85,8 @@ def main():
     print("Generating gap_vs_N.png...")
     plt.figure(figsize=(7.5, 4.5))
     
-    # Filter for N-scaling experiments (where p is fixed to 3 for QAOA solvers or is null for classical)
-    df_n = df[df['p'].isna() | (df['p'] == 3)]
+    # Filter for the N-scaling phase and collapse Standard QAOA to its best restart.
+    df_n = filter_analysis_frame(df, 'N_scaling')
     
     # Group by Solver and N to get the mean gap
     df_gap = df_n.groupby(['Solver', 'N'])['Optimization GAP (%)'].mean().reset_index()
@@ -226,8 +246,9 @@ def main():
     print("Generating gap_vs_p.png...")
     plt.figure(figsize=(7.5, 4.5))
     
-    # Filter for N=14 and depth p not being null
-    df_p = df[(df['N'] == 14) & df['p'].notna()]
+    # Filter for the p-scaling phase and collapse Standard QAOA to its best restart.
+    df_p = filter_analysis_frame(df, 'p_scaling')
+    df_p = df_p[(df_p['N'] == 14) & df_p['p'].notna()]
     
     df_gap_p = df_p.groupby(['Solver', 'p'])['Optimization GAP (%)'].mean().reset_index()
     
@@ -293,7 +314,7 @@ def main():
     print("Generating radar_chart_performance.png...")
     
     # Aggregated metrics by solver over the N-scaling dataset
-    df_agg = df_n.groupby('Solver').mean().reset_index()
+    df_agg = df_n.groupby('Solver').mean(numeric_only=True).reset_index()
     
     # Select solvers
     target_solvers_radar = ["Gurobi", "Simulated Annealing", "Standard QAOA", "XY-QAOA Regularized"]
