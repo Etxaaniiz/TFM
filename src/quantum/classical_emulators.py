@@ -166,12 +166,13 @@ def solve_qaoa_pure_numpy(
     mixer: str = "xy",
     init_type: str = "random",
     alpha: float = 0.0,
-    maxiter: int = 100
+    maxiter: int = 100,
+    jitter: float = 0.0
 ) -> Dict[str, Any]:
     """
     A standalone solver function that optimizes QAOA RX, XY-QAOA, and Regularized XY-QAOA
     using the pure NumPy Statevector simulator.
-    
+
     Parameters:
     instance (dict): The portfolio problem instance containing N, K, mu, Sigma, Q.
     p (int): Number of layers.
@@ -179,7 +180,14 @@ def solve_qaoa_pure_numpy(
     init_type (str): 'random' or 'tqa' (Trotterized Quantum Annealing schedules).
     alpha (float): Ridge L2 regularization multiplier (used with 'tqa' initialization).
     maxiter (int): Maximum classic optimization evaluations.
-    
+    jitter (float): Std-dev of Gaussian noise added to the TQA anchor before starting
+        COBYLA (only used with init_type='tqa'). The anchor search itself is fully
+        deterministic given Q, so without this, every restart of a 'tqa'-initialized
+        solver starts from (and converges to) the exact same point - restarts add no
+        diversity at all. jitter, seeded from instance['seed'], gives each restart a
+        distinct starting point near the anchor while the Ridge penalty (if alpha>0)
+        still pulls optimization back towards the unperturbed anchor itself.
+
     Returns:
     dict: Detailed solver results compatible with classic_solvers output format.
     """
@@ -214,7 +222,11 @@ def solve_qaoa_pure_numpy(
                 best_e = e
                 best_sched = sched
         tqa_anchor = best_sched
-        init_point = tqa_anchor.copy()
+        if jitter > 0.0:
+            rng = np.random.RandomState(instance.get('seed', 42))
+            init_point = tqa_anchor + rng.normal(0.0, jitter, size=tqa_anchor.shape)
+        else:
+            init_point = tqa_anchor.copy()
     else:
         # Random initial parameters in [0, pi/2]
         np.random.seed(instance.get('seed', 42))

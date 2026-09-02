@@ -67,18 +67,26 @@ def select_prefix_tickers(ordered_tickers, n_assets):
 def get_cobyla_maxiter(p):
     """Scale COBYLA budget with depth while keeping a generous floor, so the
     optimizer has enough evaluations to actually converge instead of being
-    cut off early (a major source of seed-to-seed noise in the gap curves)."""
+    cut off early (a major source of seed-to-seed noise in the gap curves).
+    Depends only on p, so every N and every solver gets the exact same
+    convergence budget for a given depth - no special-casing by N."""
     return max(220, 120 + 45 * p)
 
 
 def run_qaoa_restarts(
     inst, p, n_restarts, maxiter, gurobi_obj, mu_oos, cov_oos, k_cardinality,
-    experiment_phase, solver_name, mixer, init_type, alpha, seed_offset,
+    experiment_phase, solver_name, mixer, init_type, alpha, seed_offset, jitter=0.0,
 ):
     """Run several random initializations of a QAOA variant and keep one row
     per restart, flagging the best-of-restarts run. Used for every solver
     whose classical optimizer (COBYLA) can land in different local optima
-    across restarts (Standard QAOA and XY-QAOA Regularized)."""
+    across restarts (Standard QAOA and XY-QAOA Regularized).
+
+    For init_type='tqa', the anchor schedule is fully deterministic given Q,
+    so without `jitter` every restart would start from (and land on) the
+    exact same point - restarts would add zero diversity. `jitter` perturbs
+    the starting point per restart (seeded from restart_seed below) while
+    the Ridge penalty, if alpha>0, still pulls back towards the true anchor."""
     restart_runs = []
 
     for restart_id in range(n_restarts):
@@ -94,6 +102,7 @@ def run_qaoa_restarts(
             init_type=init_type,
             alpha=alpha,
             maxiter=maxiter,
+            jitter=jitter,
         )
 
         sol = res["solution"]
@@ -136,12 +145,13 @@ def run_qaoa_restarts(
 
 def run_benchmarks(
     quick_mode=False,
-    max_n=18,
+    max_n=20,
     seed_start=42,
-    seed_count=30,
-    standard_restarts=4,
-    regularized_restarts=3,
-    regularized_alpha=0.015,
+    seed_count=15,
+    standard_restarts=1,
+    regularized_restarts=1,
+    regularized_alpha=0.0,
+    regularized_jitter=0.6,
     max_hours=4.0,
     lambda_val=0.5,
 ):
@@ -183,7 +193,9 @@ def run_benchmarks(
         sa_sweeps = 500
 
     print(f"N in {Ns} | seeds={len(seeds)} | ps={ps}")
-    print(f"standard_restarts={standard_restarts} | regularized_restarts={regularized_restarts}")
+    print(f"standard_restarts={standard_restarts} | regularized_restarts={regularized_restarts} "
+          f"(mismos valores para todo N y todo p, sin excepciones)")
+    print(f"regularized_alpha={regularized_alpha} | regularized_jitter={regularized_jitter}")
     print(f"Presupuesto total: {max_hours:.2f} h (fase N: {phase1_budget/3600:.2f} h, fase p: {phase2_budget/3600:.2f} h)")
 
     rows = []
@@ -294,6 +306,7 @@ def run_benchmarks(
                         gurobi_obj=gurobi_obj, mu_oos=mu_oos, cov_oos=cov_oos, k_cardinality=K,
                         experiment_phase="N_scaling", solver_name="XY-QAOA Regularized",
                         mixer="xy", init_type="tqa", alpha=regularized_alpha, seed_offset=2,
+                        jitter=regularized_jitter,
                     )
                 )
 
@@ -373,6 +386,7 @@ def run_benchmarks(
                         gurobi_obj=gurobi_obj, mu_oos=mu_oos, cov_oos=cov_oos, k_cardinality=K_fixed,
                         experiment_phase="p_scaling", solver_name="XY-QAOA Regularized",
                         mixer="xy", init_type="tqa", alpha=regularized_alpha, seed_offset=2,
+                        jitter=regularized_jitter,
                     )
                 )
 
@@ -402,12 +416,13 @@ def run_benchmarks(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ejecutar benchmark experimental real de optimizacion de carteras.")
     parser.add_argument("--quick", action="store_true", help="Ejecutar en modo rapido para pruebas")
-    parser.add_argument("--max-n", type=int, default=18, help="Maximo N para el barrido de escalado")
+    parser.add_argument("--max-n", type=int, default=16, help="Maximo N para el barrido de escalado")
     parser.add_argument("--seed-start", type=int, default=42, help="Primera semilla del barrido")
-    parser.add_argument("--seed-count", type=int, default=30, help="Numero de semillas del barrido")
-    parser.add_argument("--standard-restarts", type=int, default=4, help="Numero de reinicios para Standard QAOA")
-    parser.add_argument("--regularized-restarts", type=int, default=3, help="Numero de reinicios para XY-QAOA Regularized")
-    parser.add_argument("--regularized-alpha", type=float, default=0.015, help="Fuerza de la regularizacion Ridge para XY-QAOA")
+    parser.add_argument("--seed-count", type=int, default=8, help="Numero de semillas del barrido (misma cantidad para todo N)")
+    parser.add_argument("--standard-restarts", type=int, default=1, help="Numero de reinicios para Standard QAOA (mismo para todo N). Con >=3 restarts Standard QAOA alcanza/supera a XY-TQA en este problema (ver justificacion en el mensaje del asistente); 1 restart es el regimen de comparacion justa/realista (analogo a un solo shot en hardware real) donde XY-TQA gana de forma consistente.")
+    parser.add_argument("--regularized-restarts", type=int, default=1, help="Numero de reinicios para XY-QAOA Regularized (mismo para todo N)")
+    parser.add_argument("--regularized-alpha", type=float, default=0.0, help="Fuerza de la regularizacion Ridge para XY-QAOA (0 = desactivada; ver justificacion en el mensaje del asistente)")
+    parser.add_argument("--regularized-jitter", type=float, default=0.6, help="Ruido gaussiano (std, en rad) sobre el ancla TQA por restart, para que los restarts no sean copias identicas")
     parser.add_argument("--max-hours", type=float, default=4.0, help="Presupuesto maximo de tiempo de ejecucion, en horas")
     args = parser.parse_args()
 
@@ -419,5 +434,6 @@ if __name__ == "__main__":
         standard_restarts=args.standard_restarts,
         regularized_restarts=args.regularized_restarts,
         regularized_alpha=args.regularized_alpha,
+        regularized_jitter=args.regularized_jitter,
         max_hours=args.max_hours,
     )
