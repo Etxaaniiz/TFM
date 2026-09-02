@@ -143,6 +143,79 @@ def run_qaoa_restarts(
     return restart_runs
 
 
+# ============================================================================
+# RIDGE ALPHA ABLATION (alpha=0 vs alpha>0, justifica el valor de --regularized-alpha)
+# ============================================================================
+
+ALPHA_ABLATION_NS = [6, 8, 10, 12, 14]
+ALPHA_ABLATION_SEEDS = [42, 43, 44, 45, 46]
+ALPHA_ABLATION_P = 3
+ALPHA_ABLATION_OFF = 0.0
+ALPHA_ABLATION_ON = 0.1
+
+
+def run_alpha_ablation(alpha_on=ALPHA_ABLATION_ON, jitter=0.6):
+    """Compares XY-QAOA with TQA init at alpha=0 (no Ridge) vs. alpha=alpha_on
+    (Ridge active), same seeds/jitter/maxiter, up to N=14. Used to justify
+    whether the Ridge penalty is worth keeping in the 'XY-QAOA Regularized'
+    solver, by saving both the Optimization GAP and Execution Time for both
+    settings so they can be plotted side by side."""
+    print("=" * 70)
+    print("ABLACION DE ALPHA (Ridge L2): alpha=0 vs alpha={:.3f}".format(alpha_on))
+    print(f"  N in {ALPHA_ABLATION_NS} | seeds={ALPHA_ABLATION_SEEDS} | p={ALPHA_ABLATION_P} | jitter={jitter}")
+    print("=" * 70)
+
+    processed_dir = os.path.join(project_root, "data", "processed")
+    all_tickers, mu_is_all, cov_is_all, _, _ = load_regime_data(processed_dir)
+    ticker_orders = {seed: get_nested_ticker_order(all_tickers, seed) for seed in ALPHA_ABLATION_SEEDS}
+
+    rows = []
+    maxiter_qaoa = get_cobyla_maxiter(ALPHA_ABLATION_P)
+
+    for N in ALPHA_ABLATION_NS:
+        K = N // 2
+        print(f"\n--- N={N}, K={K} ---")
+        for seed in ALPHA_ABLATION_SEEDS:
+            selected_tickers = select_prefix_tickers(ticker_orders[seed], N)
+            mu_is = mu_is_all.loc[selected_tickers].values
+            cov_is = cov_is_all.loc[selected_tickers, selected_tickers].values
+
+            Q = build_qubo(mu_is, cov_is, K, lambda_val=0.5)
+            inst = {
+                'dataset': 'real_finance_SP500_IBEX',
+                'instance_id': f"alpha_N{N}_K{K}_s{seed}",
+                'N': N, 'K': K, 'mu': mu_is, 'Sigma': cov_is, 'Q': Q,
+                'lambda_val': 0.5, 'seed': seed, 'tickers': selected_tickers,
+            }
+
+            res_gurobi = solve_gurobi(inst, lambda_val=0.5)
+            gurobi_obj = res_gurobi['objective']
+
+            for alpha_val, alpha_label in [(ALPHA_ABLATION_OFF, "Sin Ridge (alpha=0)"), (alpha_on, f"Con Ridge (alpha={alpha_on})")]:
+                res = solve_qaoa_pure_numpy(
+                    inst, p=ALPHA_ABLATION_P, mixer="xy", init_type="tqa",
+                    alpha=alpha_val, maxiter=maxiter_qaoa, jitter=jitter,
+                )
+                gap = compute_gap(res["objective"], gurobi_obj) * 100.0
+                rows.append({
+                    "N": N, "K": K, "p": ALPHA_ABLATION_P, "seed": seed,
+                    "alpha": alpha_val, "alpha_label": alpha_label,
+                    "Optimization GAP (%)": gap,
+                    "Execution Time (s)": res["runtime_seconds"],
+                })
+
+            print(f"  Seed {seed} | Gurobi: {gurobi_obj:.4f} | "
+                  f"GAP alpha=0: {rows[-2]['Optimization GAP (%)']:.2f}% (t={rows[-2]['Execution Time (s)']:.3f}s) | "
+                  f"GAP alpha={alpha_on}: {rows[-1]['Optimization GAP (%)']:.2f}% (t={rows[-1]['Execution Time (s)']:.3f}s)")
+
+    df_ablation = pd.DataFrame(rows)
+    out_dir = os.path.join(project_root, "output", "results")
+    os.makedirs(out_dir, exist_ok=True)
+    out_csv = os.path.join(out_dir, "alpha_ablation.csv")
+    df_ablation.to_csv(out_csv, index=False)
+    print(f"\n[OK] Resultados de la ablacion de alpha guardados en: {out_csv}")
+
+
 def run_benchmarks(
     quick_mode=False,
     max_n=20,
@@ -299,7 +372,8 @@ def run_benchmarks(
                     "Execution Time (s)": res_xy['runtime_seconds'], "objective": xy_obj,
                 })
 
-                # 5. XY-QAOA REGULARIZED (XY mixer, Dicke state, TQA init, Ridge L2) - best of restarts
+                # 5. XY-QAOA REGULARIZED (XY mixer, Dicke state, TQA init + jitter; Ridge L2
+                #    disabled by default - see run_alpha_ablation, alpha>0 hurts the GAP) - best of restarts
                 rows.extend(
                     run_qaoa_restarts(
                         inst=inst, p=p_fixed, n_restarts=regularized_restarts, maxiter=maxiter_qaoa,
@@ -416,15 +490,20 @@ def run_benchmarks(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ejecutar benchmark experimental real de optimizacion de carteras.")
     parser.add_argument("--quick", action="store_true", help="Ejecutar en modo rapido para pruebas")
-    parser.add_argument("--max-n", type=int, default=16, help="Maximo N para el barrido de escalado")
+    parser.add_argument("--max-n", type=int, default=20, help="Maximo N para el barrido de escalado")
     parser.add_argument("--seed-start", type=int, default=42, help="Primera semilla del barrido")
-    parser.add_argument("--seed-count", type=int, default=8, help="Numero de semillas del barrido (misma cantidad para todo N)")
+    parser.add_argument("--seed-count", type=int, default=12, help="Numero de semillas del barrido (misma cantidad para todo N)")
     parser.add_argument("--standard-restarts", type=int, default=1, help="Numero de reinicios para Standard QAOA (mismo para todo N). Con >=3 restarts Standard QAOA alcanza/supera a XY-TQA en este problema (ver justificacion en el mensaje del asistente); 1 restart es el regimen de comparacion justa/realista (analogo a un solo shot en hardware real) donde XY-TQA gana de forma consistente.")
     parser.add_argument("--regularized-restarts", type=int, default=1, help="Numero de reinicios para XY-QAOA Regularized (mismo para todo N)")
-    parser.add_argument("--regularized-alpha", type=float, default=0.0, help="Fuerza de la regularizacion Ridge para XY-QAOA (0 = desactivada; ver justificacion en el mensaje del asistente)")
+    parser.add_argument("--regularized-alpha", type=float, default=0.0, help="Fuerza de la regularizacion Ridge para XY-QAOA (0 = desactivada por defecto: la ablacion via --alpha-ablation muestra que alpha>0 empeora el GAP, ver GapRegularizado.png/TiempoRegularizado.png)")
     parser.add_argument("--regularized-jitter", type=float, default=0.6, help="Ruido gaussiano (std, en rad) sobre el ancla TQA por restart, para que los restarts no sean copias identicas")
     parser.add_argument("--max-hours", type=float, default=4.0, help="Presupuesto maximo de tiempo de ejecucion, en horas")
+    parser.add_argument("--alpha-ablation", action="store_true", help="Ejecutar unicamente la ablacion de alpha (Ridge on/off, N<=14) y guardar output/results/alpha_ablation.csv")
     args = parser.parse_args()
+
+    if args.alpha_ablation:
+        run_alpha_ablation(alpha_on=args.regularized_alpha, jitter=args.regularized_jitter)
+        sys.exit(0)
 
     run_benchmarks(
         quick_mode=args.quick,

@@ -44,6 +44,16 @@ def setup_plot_style():
     })
 
 
+# "XY-QAOA Regularized" is the Solver value stored in results.csv/results16.csv,
+# kept as-is so filters against existing data keep working. Ridge (alpha) is
+# disabled by default (see run_alpha_ablation / GapRegularizado.png), so the
+# display label used on every plot below says what the solver actually does:
+# TQA-anchored initialization + jitter, not Ridge regularization.
+DISPLAY_NAME = {
+    "XY-QAOA Regularized": "XY-QAOA (TQA)",
+}
+
+
 def filter_analysis_frame(df, phase_name):
     """Keep only the requested phase and the selected best restart rows."""
     filtered = df.copy()
@@ -101,7 +111,7 @@ def main():
             solver_data['N'], 
             solver_data['Optimization GAP (%)'], 
             marker='o', 
-            label=solver, 
+            label=DISPLAY_NAME.get(solver, solver), 
             color=colors.get(solver), 
             linewidth=1.75
         )
@@ -121,9 +131,22 @@ def main():
     # ==========================================
     print("Generating sharpe_vs_N.png...")
     plt.figure(figsize=(7.5, 4.5))
-    
+
+    # This figure blends two runs: N=6..16 from results16.csv, N=18..20 from
+    # results.csv, since results16.csv only covers up to N=16.
+    csv16_path = os.path.join(project_root, "output", "results", "results16.csv")
+    if os.path.exists(csv16_path):
+        df16_n = filter_analysis_frame(pd.read_csv(csv16_path), 'N_scaling')
+        df_sharpe_source = pd.concat([
+            df16_n[df16_n['N'] <= 16],
+            df_n[df_n['N'] > 16],
+        ], ignore_index=True)
+    else:
+        print(f"  [AVISO] {csv16_path} no encontrado, usando solo results.csv")
+        df_sharpe_source = df_n
+
     # Group by Solver and N to get mean Sharpe ratios
-    df_sharpe = df_n.groupby(['Solver', 'N'])[['Sharpe Ratio In-Sample', 'Sharpe Ratio Out-of-Sample']].mean().reset_index()
+    df_sharpe = df_sharpe_source.groupby(['Solver', 'N'])[['Sharpe Ratio In-Sample', 'Sharpe Ratio Out-of-Sample']].mean().reset_index()
     
     # Get Gurobi data
     gurobi_data = df_sharpe[df_sharpe['Solver'] == "Gurobi"]
@@ -158,7 +181,7 @@ def main():
         linestyle='-', 
         linewidth=2.5, 
         marker='s', 
-        label="XY-QAOA Regularized (Out-of-Sample)"
+        label="XY-QAOA TQA (Out-of-Sample)"
     )
     
     plt.title("Rendimiento Financiero (Ratio de Sharpe) vs. Número de Activos ($N$)", weight='bold', pad=12)
@@ -189,7 +212,7 @@ def main():
             solver_data['N'], 
             solver_data['Execution Time (s)'], 
             marker='o', 
-            label=solver, 
+            label=DISPLAY_NAME.get(solver, solver), 
             color=colors.get(solver), 
             linewidth=1.75
         )
@@ -224,7 +247,7 @@ def main():
             solver_data['N'], 
             solver_data['Feasibility Ratio (%)'], 
             marker='o', 
-            label=solver, 
+            label=DISPLAY_NAME.get(solver, solver), 
             color=colors.get(solver), 
             linewidth=2.0
         )
@@ -261,7 +284,7 @@ def main():
             solver_data['p'], 
             solver_data['Optimization GAP (%)'], 
             marker='s', 
-            label=solver, 
+            label=DISPLAY_NAME.get(solver, solver), 
             color=colors.get(solver), 
             linewidth=1.75
         )
@@ -293,7 +316,7 @@ def main():
             solver_data['p'], 
             solver_data['Execution Time (s)'], 
             marker='o', 
-            label=solver, 
+            label=DISPLAY_NAME.get(solver, solver), 
             color=colors.get(solver), 
             linewidth=1.75
         )
@@ -361,7 +384,7 @@ def main():
         values = [solver_row[m + '_norm'].values[0] for m in metrics]
         values += values[:1] # Close the polygon
         
-        ax.plot(angles, values, color=colors.get(solver), linewidth=2.0, label=solver)
+        ax.plot(angles, values, color=colors.get(solver), linewidth=2.0, label=DISPLAY_NAME.get(solver, solver))
         ax.fill(angles, values, color=colors.get(solver), alpha=0.15)
         
     # Set the labels for each category

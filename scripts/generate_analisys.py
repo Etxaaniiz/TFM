@@ -79,7 +79,7 @@ def run_noise_analysis():
 
     results = {
         "Standard QAOA (RX)": {pe: [] for pe in P_ERR_VALS},
-        "XY-QAOA Regularizado": {pe: [] for pe in P_ERR_VALS},
+        "XY-QAOA (TQA)": {pe: [] for pe in P_ERR_VALS},
     }
 
     for seed in SEEDS_NOISE:
@@ -107,7 +107,7 @@ def run_noise_analysis():
             feas_rx = sample_with_bitflip_noise(probs_rx, N_NOISE, K_NOISE, p_err, N_SHOTS, rng_noise)
             feas_xy = sample_with_bitflip_noise(probs_xy, N_NOISE, K_NOISE, p_err, N_SHOTS, rng_noise)
             results["Standard QAOA (RX)"][p_err].append(feas_rx * 100.0)
-            results["XY-QAOA Regularizado"][p_err].append(feas_xy * 100.0)
+            results["XY-QAOA (TQA)"][p_err].append(feas_xy * 100.0)
             print(f"    p_err={p_err*100:4.0f}%  |  RX feas={feas_rx*100:.1f}%  |  XY feas={feas_xy*100:.1f}%")
 
     print("\n  Generando figura factibilidad_vs_ruido.png...")
@@ -130,7 +130,7 @@ def run_noise_analysis():
 
     palette = {
         "Standard QAOA (RX)": "#EA580C",
-        "XY-QAOA Regularizado": "#10B981",
+        "XY-QAOA (TQA)": "#10B981",
     }
 
     fig, ax = plt.subplots(figsize=(8.0, 5.5))
@@ -149,7 +149,7 @@ def run_noise_analysis():
     ax.set_ylabel("Tasa de Factibilidad (%)")
     ax.set_title(
         f"Degradación de Factibilidad bajo Ruido Bit-Flip\n"
-        f"(XY-QAOA Reg. vs. QAOA estándar, N={N_NOISE}, K={K_NOISE}, p={P_NOISE})",
+        f"(XY-QAOA TQA vs. QAOA estándar, N={N_NOISE}, K={K_NOISE}, p={P_NOISE})",
         weight='bold', pad=12
     )
     ax.set_xticks(x_ticks)
@@ -169,8 +169,8 @@ def run_noise_analysis():
     for pe in P_ERR_VALS:
         rx_m = np.mean(results["Standard QAOA (RX)"][pe])
         rx_s = np.std(results["Standard QAOA (RX)"][pe])
-        xy_m = np.mean(results["XY-QAOA Regularizado"][pe])
-        xy_s = np.std(results["XY-QAOA Regularizado"][pe])
+        xy_m = np.mean(results["XY-QAOA (TQA)"][pe])
+        xy_s = np.std(results["XY-QAOA (TQA)"][pe])
         print(f"  {pe*100:6.0f}%  {rx_m:10.2f}%  {rx_s:8.2f}  {xy_m:10.2f}%  {xy_s:8.2f}")
 
 
@@ -232,89 +232,6 @@ def run_variance_analysis():
     print()
     print(f"  → Reducción global de std del GAP: {global_red:.1f}%")
 
-    print("\n  Generando figura boxplot_varianza_semillas.png...")
-    try:
-        plt.style.use('seaborn-v0_8-whitegrid')
-    except OSError:
-        sns.set_style('whitegrid')
-
-    plt.rcParams.update({
-        'font.size': 11,
-        'axes.labelsize': 12,
-        'axes.titlesize': 13,
-        'xtick.labelsize': 10,
-        'ytick.labelsize': 10,
-        'legend.fontsize': 10,
-        'figure.dpi': 300,
-        'savefig.bbox': 'tight',
-        'font.family': 'sans-serif'
-    })
-
-    palette = {
-        "Standard QAOA": "#EA580C",
-        "XY-QAOA Regularized": "#10B981"
-    }
-
-    fig, axes = plt.subplots(2, 4, figsize=(16, 7), sharey=False)
-    axes = axes.flatten()
-
-    for idx, N in enumerate(Ns[:8]):
-        ax = axes[idx]
-        df_N = df_scale[df_scale['N'] == N].copy()
-
-        box_data = []
-        box_labels = []
-        box_colors = []
-        for solver in ["Standard QAOA", "XY-QAOA Regularized"]:
-            vals = df_N[df_N['Solver'] == solver]['Optimization GAP (%)'].values
-            box_data.append(vals)
-            short = "QAOA (RX)" if "Standard" in solver else "XY-Reg."
-            box_labels.append(short)
-            box_colors.append(palette[solver])
-
-        bp = ax.boxplot(
-            box_data, tick_labels=box_labels, patch_artist=True,
-            widths=0.5, medianprops=dict(color='white', linewidth=2),
-            whiskerprops=dict(linewidth=1.2, color='#64748B'),
-            capprops=dict(linewidth=1.2, color='#64748B'),
-            flierprops=dict(marker='o', markersize=4, alpha=0.5)
-        )
-        for patch, color in zip(bp['boxes'], box_colors):
-            patch.set_facecolor(color)
-            patch.set_alpha(0.75)
-
-        for j, (data, color) in enumerate(zip(box_data, box_colors)):
-            x_jitter = np.random.RandomState(42).normal(j + 1, 0.05, size=len(data))
-            ax.scatter(x_jitter, data, color=color, alpha=0.8, s=30, zorder=5)
-
-        ax.set_title(f"N = {N}", weight='bold', fontsize=11)
-        ax.set_ylabel("GAP (%)" if idx % 4 == 0 else "")
-        ax.set_xlabel("")
-        sns.despine(ax=ax)
-
-    for idx in range(len(Ns), 8):
-        axes[idx].set_visible(False)
-
-    fig.suptitle(
-        "Varianza Inter-Semilla del GAP de Optimización:\n"
-        "QAOA Estándar vs. XY-QAOA Regularizado (Ridge + TQA)",
-        weight='bold', fontsize=13, y=1.01
-    )
-
-    from matplotlib.patches import Patch
-    legend_elements = [
-        Patch(facecolor="#EA580C", alpha=0.75, label="QAOA estándar (RX)"),
-        Patch(facecolor="#10B981", alpha=0.75, label="XY-QAOA Reg. (Ridge + TQA)"),
-    ]
-    fig.legend(handles=legend_elements, loc='lower center', ncol=2,
-               frameon=True, facecolor='white', edgecolor='#E2E8F0',
-               bbox_to_anchor=(0.5, -0.04), fontsize=10)
-
-    plt.tight_layout()
-    out_path = os.path.join(output_dir, "boxplot_varianza_semillas.png")
-    plt.savefig(out_path, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"  [OK] Guardado en: {out_path}")
 
     print("  Generando figura std_gap_vs_N.png...")
     fig2, ax2 = plt.subplots(figsize=(8.0, 5.0))
@@ -515,10 +432,213 @@ def run_scaling_analysis():
     print(f"  [OK] Guardado en: {out_path}")
 
 
+# ============================================================================
+# RIDGE ALPHA ABLATION (alpha=0 vs alpha>0) - ESTILO EDITORIAL
+# ============================================================================
+
+
+def run_alpha_ablation_analysis():
+    print("=" * 70)
+    print("ABLACION DE ALPHA (Ridge L2): alpha=0 vs alpha>0")
+    print("=" * 70)
+
+    csv_path = os.path.join(
+        project_root, "output", "results", "alpha_ablation.csv"
+    )
+    if not os.path.exists(csv_path):
+        print(
+            f"Error: {csv_path} no encontrado. Ejecuta 'python scripts/run_benchmarks.py --alpha-ablation' primero."
+        )
+        return
+
+    df = pd.read_csv(csv_path)
+    output_dir = os.path.join(
+        project_root, "output", "figures_tfm", "6.Resultados"
+    )
+    os.makedirs(output_dir, exist_ok=True)
+
+    labels = list(df.sort_values("alpha")["alpha_label"].unique())
+    label_off, label_on = labels[0], labels[1]
+    alpha_on_val = df[df["alpha_label"] == label_on]["alpha"].iloc[0]
+
+    agg = (
+        df.groupby(["alpha_label", "N"])[
+            ["Optimization GAP (%)", "Execution Time (s)"]
+        ]
+        .agg(["mean", "std"])
+        .reset_index()
+    )
+    agg.columns = [
+        "alpha_label",
+        "N",
+        "gap_mean",
+        "gap_std",
+        "time_mean",
+        "time_std",
+    ]
+
+    Ns = sorted(df["N"].unique())
+
+    # --- Configuración Estética Global ---
+    plt.rcParams.update(
+        {
+            "font.size": 11,
+            "axes.labelsize": 12,
+            "axes.titlesize": 13,
+            "xtick.labelsize": 10,
+            "ytick.labelsize": 10,
+            "legend.fontsize": 10.5,
+            "legend.title_fontsize": 11,
+            "figure.dpi": 300,
+            "savefig.bbox": "tight",
+            "font.family": "sans-serif",
+            "axes.edgecolor": "#94A3B8",
+            "axes.linewidth": 1.0,
+        }
+    )
+
+    # Paleta balanceada: Slate Grey (Base/Off) vs. Vivid Indigo (Regularizado/On)
+    style_cfg = {
+        label_off: {
+            "color": "#475569",
+            "marker": "o",
+            "linestyle": "--",
+            "alpha_fill": 0.12,
+        },
+        label_on: {
+            "color": "#4F46E5",
+            "marker": "s",
+            "linestyle": "-",
+            "alpha_fill": 0.18,
+        },
+    }
+
+    # ── 1. GapRegularizado.png ──────────────────────────────────────────
+    print("\n  Generando figura GapRegularizado.png...")
+    fig, ax = plt.subplots(figsize=(7.2, 4.8))
+
+    for label in [label_off, label_on]:
+        sub = agg[agg["alpha_label"] == label].sort_values("N")
+        cfg = style_cfg[label]
+
+        # Banda de dispersión (media ± std)
+        ax.fill_between(
+            sub["N"],
+            np.maximum(0, sub["gap_mean"] - sub["gap_std"]),
+            sub["gap_mean"] + sub["gap_std"],
+            color=cfg["color"],
+            alpha=cfg["alpha_fill"],
+            zorder=2,
+        )
+        # Curva media con marcadores destacados
+        ax.plot(
+            sub["N"],
+            sub["gap_mean"],
+            label=label,
+            color=cfg["color"],
+            linestyle=cfg["linestyle"],
+            linewidth=2.2,
+            marker=cfg["marker"],
+            markersize=7,
+            markeredgewidth=1.8,
+            markeredgecolor="white",
+            zorder=4,
+        )
+
+    ax.set_xlabel("Número de Activos ($N$)", labelpad=8, weight="medium")
+    ax.set_ylabel("Optimization GAP (%)", labelpad=8, weight="medium")
+    ax.set_title(
+        "Impacto de la Regularización Ridge en el GAP de Optimización\n"
+        rf"XY-QAOA con TQA ($\alpha = 0$ vs. $\alpha = {alpha_on_val}$)",
+        weight="bold",
+        pad=14,
+    )
+
+    ax.set_xticks(Ns)
+    ax.set_ylim(bottom=0)
+    ax.grid(axis="y", linestyle="--", linewidth=0.7, color="#E2E8F0", zorder=0)
+    ax.grid(axis="x", visible=False)
+    ax.legend(
+        frameon=True,
+        facecolor="white",
+        edgecolor="#CBD5E1",
+        framealpha=0.95,
+        loc="best",
+    )
+    sns.despine(ax=ax, top=True, right=True)
+
+    plt.tight_layout()
+    out_path_gap = os.path.join(output_dir, "GapRegularizado.png")
+    plt.savefig(out_path_gap, dpi=300)
+    plt.close()
+    print(f"  [OK] Guardado en: {out_path_gap}")
+
+    # ── 2. TiempoRegularizado.png ───────────────────────────────────────
+    print("  Generando figura TiempoRegularizado.png...")
+    fig2, ax2 = plt.subplots(figsize=(7.2, 4.8))
+
+    for label in [label_off, label_on]:
+        sub = agg[agg["alpha_label"] == label].sort_values("N")
+        cfg = style_cfg[label]
+
+        # Banda de dispersión
+        ax2.fill_between(
+            sub["N"],
+            np.maximum(0, sub["time_mean"] - sub["time_std"]),
+            sub["time_mean"] + sub["time_std"],
+            color=cfg["color"],
+            alpha=cfg["alpha_fill"],
+            zorder=2,
+        )
+        # Curva media
+        ax2.plot(
+            sub["N"],
+            sub["time_mean"],
+            label=label,
+            color=cfg["color"],
+            linestyle=cfg["linestyle"],
+            linewidth=2.2,
+            marker=cfg["marker"],
+            markersize=7,
+            markeredgewidth=1.8,
+            markeredgecolor="white",
+            zorder=4,
+        )
+
+    ax2.set_xlabel("Número de Activos ($N$)", labelpad=8, weight="medium")
+    ax2.set_ylabel("Tiempo de Ejecución (s)", labelpad=8, weight="medium")
+    ax2.set_title(
+        "Sobrecoste Temporal de la Regularización Ridge\n"
+        rf"XY-QAOA con TQA ($\alpha = 0$ vs. $\alpha = {alpha_on_val}$)",
+        weight="bold",
+        pad=14,
+    )
+
+    ax2.set_xticks(Ns)
+    ax2.set_ylim(bottom=0)
+    ax2.grid(axis="y", linestyle="--", linewidth=0.7, color="#E2E8F0", zorder=0)
+    ax2.grid(axis="x", visible=False)
+    ax2.legend(
+        frameon=True,
+        facecolor="white",
+        edgecolor="#CBD5E1",
+        framealpha=0.95,
+        loc="best",
+    )
+    sns.despine(ax=ax2, top=True, right=True)
+
+    plt.tight_layout()
+    out_path_time = os.path.join(output_dir, "TiempoRegularizado.png")
+    plt.savefig(out_path_time, dpi=300)
+    plt.close()
+    print(f"  [OK] Guardado en: {out_path_time}")
+
+
 def main():
     run_noise_analysis()
     run_variance_analysis()
     run_scaling_analysis()
+    run_alpha_ablation_analysis()
 
 
 if __name__ == "__main__":
