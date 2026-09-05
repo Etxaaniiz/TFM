@@ -36,7 +36,14 @@ XY-QAOA Regularizado exhibe la curva más suave de los tres solvers variacionale
 
 Conviene remarcar el marco de interpretación correcto de esta figura: dado que cada punto corresponde a una única ejecución del circuito por semilla, lo que se está midiendo no es ``el mejor resultado que QAOA puede alcanzar'', sino el resultado esperable bajo un presupuesto de ejecución mínimo, análogo a una única pasada en un dispositivo NISQ real donde cada reinicio adicional tiene un coste físico (Sección 5.4.4.1). Bajo esa lectura, la comparación entre Standard QAOA y XY-QAOA Regularizado no es una comparación de calidad máxima alcanzable, sino de \emph{qué tan bien se comporta cada arquitectura con el mínimo de información y de repeticiones posible}.
 
-Con esa salvedad, el dato objetivo es el siguiente: XY-QAOA Regularizado obtiene un GAP medio menor que Standard QAOA en los ocho valores de $N$ evaluados, sin excepción. La magnitud de esa diferencia, sin embargo, no seguridad una tendencia monótona con $N$: oscila entre $3{,}9$ puntos porcentuales ($N=8$) y $42{,}2$ puntos porcentuales ($N=18$), este último coincidiendo con el punto de peor comportamiento absoluto de Standard QAOA.
+Con esa salvedad, el dato objetivo es el siguiente: XY-QAOA Regularizado obtiene un GAP medio menor que Standard QAOA en los ocho valores de $N$ evaluados, sin excepción. La magnitud de esa diferencia, sin embargo, no sigue una tendencia monótona con $N$: oscila entre $3{,}9$ puntos porcentuales ($N=8$) y $42{,}2$ puntos porcentuales ($N=18$), este último coincidiendo con el punto de peor comportamiento absoluto de Standard QAOA.
+
+Situando estos tres solvers en conjunto, el orden de mérito en GAP es claro y estable en todo
+el rango: Simulated Annealing $<$ XY-QAOA Regularizado $<$ Standard QAOA. La diferencia entre
+Simulated Annealing y XY-QAOA Regularizado es, además, estadísticamente significativa en los
+ocho valores de $N$ evaluados (test de Wilcoxon pareado por semilla, $p<0{,}01$ en todos los
+casos; véase \texttt{output/results/stats\_tests\_results.csv}), por lo que no puede atribuirse
+al azar de muestreo entre semillas.
 
 \section{Robustez financiera: Ratio de Sharpe fuera de muestra}
 \label{sec:sharpe-vs-n}
@@ -51,6 +58,11 @@ Con esa salvedad, el dato objetivo es el siguiente: XY-QAOA Regularizado obtiene
 El primer dato relevante de esta figura no involucra a ningún solver cuántico: la propia comparación entre el Sharpe In-Sample y Out-of-Sample de Gurobi revela una caída sistemática de entre el $65\,\%$ y el $73\,\%$ del ratio al pasar del régimen Estable al régimen Volátil-COVID19, independientemente de $N$ (por ejemplo, en $N=14$, de $2{,}613$ a $0{,}782$). Esta degradación constituye el ``suelo'' inevitable impuesto por el cambio de régimen de mercado sobre \emph{cualquier} cartera, óptima o no, y no debe atribuirse a ninguna limitación algorítmica.
 
 La comparación pertinente para evaluar la robustez del método cuántico es, por tanto, XY-QAOA Regularizado (OOS) frente a Gurobi (OOS) --no frente a Gurobi In-Sample--, ya que ambas curvas están sujetas al mismo choque de régimen. Bajo ese criterio: en $N=6$, el Sharpe OOS de XY-QAOA Regularizado ($0{,}656$) supera ligeramente al de Gurobi OOS ($0{,}587$), un resultado que se reporta aquí como dato observado, sin atribuirle una causa estructural --puede deberse simplemente a qué activos concretos selecciona cada solver en una instancia pequeña donde el margen de variación combinatoria es reducido. En el resto del rango ($N=8$ a $N=20$), Gurobi OOS es sistemáticamente superior, con el Sharpe OOS de XY-QAOA Regularizado situándose entre el $76{,}5\,\%$ ($N=16$ y $N=20$) y el $95{,}3\,\%$ ($N=8$) del valor de Gurobi OOS. No se observa una tendencia clara de acercamiento o alejamiento progresivo con $N$: el cociente XY-QAOA/Gurobi (OOS) fluctúa dentro de esa banda ($76$--$95\,\%$) sin una dirección sistemática a lo largo del rango estudiado.
+
+Estadísticamente, ninguna de estas diferencias resulta significativa (test de Wilcoxon pareado
+por semilla, $p>0{,}05$ en los ocho valores de $N$; el valor más bajo se alcanza en $N=14$ con
+$p=0{,}052$). Por tanto, con la evidencia disponible, XY-QAOA Regularizado y Gurobi son
+financieramente comparables fuera de muestra en el rango estudiado.
 
 \section{Coste temporal y escalabilidad}
 \label{sec:tiempo-vs-n}

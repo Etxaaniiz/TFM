@@ -1,5 +1,5 @@
 \chapter{Desarrollo del Proyecto y Diseño Experimental}
-\label{cap:desarrollo_metodologia}
+\label{ch:desarrollo}
 
 \section{Introducción y trazabilidad del capítulo}
 
@@ -151,6 +151,7 @@ El número máximo de iteraciones que se concede al optimizador clásico COBYLA 
 La razón de que este presupuesto crezca con $p$ es sencilla: el número de parámetros libres del ansatz es $2p$ (un ángulo $\gamma$ y un ángulo $\beta$ por cada capa), y cuantos más parámetros tiene que ajustar el optimizador, más evaluaciones necesita razonablemente para converger a una región estable del paisaje de coste. Esta fórmula se aplica exactamente igual, sin excepción, a todos los solvers variacionales y a todos los valores de $N$ y $p$ del experimento. Esta uniformidad es una decisión deliberada: si cada solver dispusiera de un presupuesto de convergencia distinto, cualquier comparación entre ellos estaría sesgada de antemano, favoreciendo artificialmente al que más iteraciones recibiera.
 
 \subsection{Calibración empírica de restarts, $\alpha$ y jitter: estudios piloto}
+\label{subsec:calibracion_empirica}
 
 Antes de comprometer el presupuesto computacional completo al barrido final descrito en la Sección~5.4.2, se realizó un estudio piloto sobre instancias de tamaño reducido con el objetivo de calibrar tres hiperparámetros: el número de reinicios por solver, la fuerza de la regularización Ridge ($\alpha$) y la magnitud del ruido de inicialización (\texttt{jitter}). Este proceso de calibración es, en sí mismo, contenido legítimo de la investigación: responde directamente a lo que pide el objetivo OE3 (Sección~2.1.2), y documentarlo con honestidad --incluyendo los resultados que no confirmaron la hipótesis inicial-- es una muestra de rigor metodológico, no una debilidad del trabajo.
 
@@ -193,6 +194,24 @@ La Tabla~\ref{tab:restarts-ablation} recoge el GAP medio obtenido en cada combin
 \end{table}
 
 Este resultado tiene una lectura doble e importante. Por un lado, confirma que en instancias de este tamaño reducido, un presupuesto de restarts alto vuelve casi trivial el problema para cualquier solver con suficiente diversidad de puntos de partida --incluso uno tan simple como Standard QAOA con inicialización aleatoria--, lo que neutraliza cualquier ventaja algorítmica de una inicialización informada. Por otro lado, medir el tiempo total consumido por cada presupuesto de restarts (columna \texttt{Total Execution Time (s)} del mismo CSV) confirma que este comportamiento no es gratuito: el tiempo total escala aproximadamente de forma lineal con el número de restarts (de $0{,}71$~s de media con 1 restart a $3{,}47$~s con 5, para Standard QAOA), ya que cada restart implica una ejecución completa e independiente del circuito. En un dispositivo NISQ real, donde cada uno de esos restarts adicionales implica una nueva entrada en cola de ejecución y su correspondiente exposición al ruido y la decoherencia, ese coste no es una idealización de simulación sino una limitación física real.
+
+Conviene precisar, no obstante, el alcance exacto de esta comparación: al enfrentar Standard
+QAOA (mezclador $X$, inicialización aleatoria) con XY-QAOA Regularized (mezclador $XY$,
+inicialización TQA), la diferencia observada mezcla dos efectos distintos --el confinamiento
+estructural del mezclador $XY$ y el punto de partida informado de TQA-- sin que esta ablación
+por sí sola permita separarlos. Para aislar específicamente la contribución de TQA, se comparó,
+sobre el barrido principal de \texttt{results.csv} ($N=6$ a $N=20$, 12 semillas, mismo mezclador
+$XY$ en ambos casos), \textbf{XY-QAOA} con inicialización aleatoria frente a \textbf{XY-QAOA
+Regularized} con inicialización TQA, mediante un test de Wilcoxon pareado por semilla para cada
+valor de $N$ (script \texttt{scripts/run\_stats\_tests.py}, resultados en
+\texttt{output/results/stats\_tests\_results.csv}). El resultado no muestra una diferencia
+estadísticamente significativa en el GAP medio en ninguno de los ocho valores de $N$ evaluados
+($p$ entre $0{,}07$ y $0{,}90$), y la reducción de la desviación estándar del GAP atribuible a
+TQA es inconsistente entre valores de $N$ (entre $-11{,}2\,\%$ y $+34{,}1\,\%$, media
+$6{,}4\,\%$). En consecuencia, la evidencia disponible atribuye la mayor parte de la ventaja
+observada en la Tabla~\ref{tab:restarts-ablation} al confinamiento del subespacio de Dicke
+mediante el mezclador $XY$, y no a la inicialización TQA de forma aislada; esta matización se
+recoge de nuevo al contrastar la hipótesis H2 en el Capítulo~\ref{chap:conclusiones}.
 
 Por esta razón --y con esta evidencia empírica respaldándola-- el experimento final fija \texttt{standard\_restarts=1} y \texttt{regularized\_restarts=1} para todos los valores de $N$ y $p$: es la comparación de igual presupuesto computacional más representativa de un escenario de ejecución real en hardware cuántico limitado, y es precisamente el régimen en el que la ventaja de XY-QAOA Regularized frente a Standard QAOA es más clara y consistente.
 
