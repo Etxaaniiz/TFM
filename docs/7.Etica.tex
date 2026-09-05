@@ -1,63 +1,35 @@
-\chapter{Valoración Ética del Proyecto}
+\chapter{Valoración Ética}
 \label{ch:valoracion_etica}
 
-De acuerdo con las directrices metodológicas institucionales dictadas por la Universidad de Deusto \cite{DeustoEthics2024} y los estándares deontológicos que regulan la práctica de la ingeniería avanzada, este capítulo desarrolla una auditoría multidimensional sobre el impacto ético, social y medioambiental del ecosistema de software desarrollado. Las tecnologías disruptivas basadas en el co-procesamiento cuántico variacional aplicado a los mercados de capitales no pueden evaluarse de forma aislada a partir de su Optimization GAP o eficiencia temporal. Por el contrario, exigen un escrutinio riguroso que evalúe la responsabilidad del investigador frente a la reproducibilidad científica, la huella ecológica de la infraestructura de cómputo y las consecuencias socioeconómicas a nivel macroestructural. En las secciones siguientes se desglosa, en primer lugar, el cumplimiento de los principios de la ética profesional a través de la honestidad científica y el movimiento \textit{Open Science}. En segundo lugar, se expone un balance analítico de la sostenibilidad ambiental evaluando la huella de carbono de las simulaciones clásicas frente a las QPUs físicas. Finalmente, se definen las salvaguardas de gobernanza implementadas en el repositorio \texttt{etxaaniiz/tfm} para mitigar la opacidad algorítmica y los riesgos de inestabilidad sistémica en los mercados globales.
-
-\section{Cumplimiento de los Principios de la Ética Profesional}
+\section{Principios de la Ética}
 \label{sec:cumplimiento_etica_profesional}
 
-\subsection{Honestidad y Rigor Científico frente al Hype Cuántico}
-Uno de los pilares éticos fundamentales sobre los que se erige este Trabajo de Fin de Máster consiste en el ejercicio explícito de la honestidad intelectual y el rigor científico. En la literatura contemporánea asociada a las tecnologías cuánticas aplicadas a los negocios, con frecuencia se incurre en fenómenos de exageración publicitaria o \textit{quantum hype}, prometiendo ventajas computacionales inmediatas que omiten las severas limitaciones físicas del hardware actual. 
+\subsection{Honestidad y Rigor Científic}
+Uno de los pilares éticos fundamentales sobre los que se erige este Trabajo consiste en el ejercicio explícito de la honestidad intelectual y el rigor científico. En la literatura contemporánea asociada a las tecnologías cuánticas aplicadas a los negocios, con frecuencia se incurre en fenómenos de exageración publicitaria o \textit{quantum hype}, prometiendo ventajas computacionales inmediatas que omiten las severas limitaciones físicas del hardware actual. 
 
-Este proyecto mitiga activamente dicha deriva reportando de manera transparente las fronteras y restricciones del modelo desarrollado en el repositorio \texttt{etxaaniiz/tfm} \cite{Etxaaniiz2026}. Como se analiza con sentido crítico en el bloque de resultados, el Optimization GAP experimenta un repunte sistemático al escalar el universo de activos hacia dimensiones de $N=20$ cúbits bajo una profundidad fija de circuito ($p=3$). En lugar de enmascarar este comportamiento mediante la selección sesgada de semillas pseudoaleatorias, la investigación asume la responsabilidad ética de documentar que dicha pérdida de precisión responde al límite de expresividad matemática intrínseca del \textit{ansatz}. Este rigor metodológico asegura que las conclusiones aporten un valor científico real y libre de distorsiones al estado del arte en finanzas cuantitativas.
+Este proyecto mitiga activamente dicha deriva reportando de manera transparente las fronteras y restricciones del modelo desarrollado en el repositorio. Como se analiza con sentido crítico en el bloque de resultados, el Optimization GAP experimenta un repunte sistemático al escalar el universo de activos hacia dimensiones de $N=20$ cúbits bajo una profundidad fija de circuito. En lugar de enmascarar este comportamiento mediante la selección sesgada de semillas pseudoaleatorias, la investigación asume la responsabilidad ética de documentar que dicha pérdida de precisión responde al límite de expresividad matemática intrínseca del \textit{ansatz}. Este rigor metodológico asegura que las conclusiones aporten un valor científico real y libre de distorsiones al estado del arte en finanzas cuantitativas.
 
-\subsection{Transparencia y Open Science}
-En consonancia con los principios de verificabilidad que gobiernan la ciencia moderna, la totalidad de la arquitectura de software, scripts de transpilación, archivos de configuración YAML y cuadernos de ejecución analítica en la nube (\texttt{TFM\_Execution\_Colab.ipynb}) se han publicado bajo un modelo de acceso abierto (\textit{Open Science}) en el repositorio público de GitHub \cite{Etxaaniiz2026}. 
+\subsection{Transparencia}
+En consonancia con los principios de verificabilidad que gobiernan la ciencia moderna, la totalidad de la arquitectura de software, scripts de transpilación, archivos de configuración YAML y cuadernos de ejecución analítica en la nube se han publicado bajo un modelo de acceso abierto (\textit{Open Science}) en un repositorio público de GitHub. 
 
 Esta decisión metodológica trasciende la mera entrega académica: busca democratizar el conocimiento de vanguardia en computación cuántica, permitiendo a la comunidad investigadora internacional auditar el pipeline de datos, replicar las 40 instancias experimentales parametrizadas de forma exacta y validar la consistencia de las ecuaciones de mapeo algebraico hacia el Hamiltoniano de Ising. Con ello, se combate el secretismo corporativo que impera en el sector \textit{Quantum Fintech}, promoviendo un ecosistema de desarrollo colaborativo y éticamente responsable.
 
-\section{Análisis de Impacto Ambiental y Sostenibilidad (Green Quantum Computing)}
+\section{Impacto Ambiental y Sostenibilidad}
 \label{sec:impacto_ambiental_green}
 
-\subsection{Huella de Carbono de la Simulación Cuántica Clásica}
+\subsection{Huella de Carbono de la Cuántica Clásica}
 La simulación exacta de funciones de onda cuánticas basadas en vectores de estado de alta densidad analítica (\textit{statevector simulation}) impone un coste energético que a menudo se invisibiliza en el plano teórico. Debido a la naturaleza del espacio de Hilbert, los requisitos de almacenamiento en memoria RAM y el esfuerzo de procesamiento numérico de la CPU y GPU se duplican de forma estrictamente exponencial ($2^N$) por cada cúbit inyectado en el registro. Durante las fases de desarrollo local y ejecución del pipeline optimizado mediante JAX y aceleración por GPU, las estaciones de trabajo operan bajo regímenes de máxima potencia sostenida para procesar las transformaciones matriciales densas de gran escala ($N=20$).
 
-Esta demanda eléctrica se traduce en una inyección directa de calor y consumo de recursos procedentes de la red clásica de centros de datos. En el contexto de este proyecto, la optimización de los algoritmos mediante compilación Just-In-Time (JIT) en el script \texttt{test\_jax.py} actúa como una salvaguarda de sostenibilidad primaria, minimizando los tiempos de desbordamiento térmico y reduciendo el consumo de kilovatios-hora (kWh) requeridos para el entrenamiento del circuito cuántico variacional frente a los entornos de simulación no optimizados \cite{GreenQuantum2023}.
+Esta demanda eléctrica se traduce en una inyección directa de calor y consumo de recursos procedentes de la red clásica de centros de datos. En el contexto de este proyecto, la optimización de los algoritmos mediante compilación Just-In-Time (JIT) actúaria como una salvaguarda de sostenibilidad primaria, minimizando los tiempos de desbordamiento térmico y reduciendo el consumo de kilovatios-hora (kWh) requeridos para el entrenamiento del circuito cuántico variacional frente a los entornos de simulación no optimizados \cite{GreenQuantum2023}.
 
-\subsection{Eficiencia Energética de las QPUs frente a la Supercomputación Clásica}
+\subsection{Eficiencia Energética}
 Frente al comportamiento exponencial e insostenible que exhibe el entorno clásico a gran escala, las Unidades de Procesamiento Cuántico (QPU) físicas de la era NISQ introducen un paradigma de eficiencia energética disruptivo \cite{Preskill2018}. Un procesador cuántico de compuertas lógicas superconductoras consume una cantidad de potencia eléctrica prácticamente constante, independientemente de la complejidad combinatoria o del volumen del espacio de soluciones explorado de forma simultánea. La principal demanda energética procede de la electrónica periférica y de los sistemas de refrigeración por dilución criogénica encargados de congelar el chip cuántico a temperaturas próximas al cero absoluto ($T \approx 15 \text{ mK}$) para mitigar la decoherencia ambiental.
 
-Al contrastar empíricamente la huella ecológica, una vez que el tamaño del universo de activos candidato cruza el umbral de la ventaja en simulación clásica, el envío de ráfagas operacionales de QAOA directamente a una QPU nativa mediante APIs en la nube (como AWS Braket) fija un techo de emisión de dióxido de carbono ($CO_2$) drásticamente inferior al de un supercomputador convencional (HPC) forzado a emular el entrelazamiento cuántico \cite{GreenQuantum2023}. La computación cuántica híbrida regularizada se consolida, por ende, como una tecnología tractora clave para el desarrollo de un sector financiero verde y sostenible (\textit{Green Computing}) \cite{GreenQuantum2023}.
+Al contrastar la huella ecológica, una vez que el tamaño del universo de activos candidato cruza el umbral de la ventaja en simulación clásica, el envío de ráfagas operacionales de QAOA directamente a una QPU nativa mediante APIs en la nube (como AWS Braket) fija un techo de emisión de dióxido de carbono ($CO_2$) drásticamente inferior al de un supercomputador convencional (HPC) forzado a emular el entrelazamiento cuántico \cite{GreenQuantum2023}. La computación cuántica híbrida regularizada se consolida, por ende, como una tecnología tractora clave para el desarrollo de un sector financiero verde y sostenible (\textit{Green Computing}) \cite{GreenQuantum2023}.
 
-\section{Dimensión Social, Económica y Gobernanza Algorítmica}
-\label{sec:dimension_social_gobernanza}
+\section{Brecha Tecnológica Cuántica}
+\label{sec:Brecha Tecnológica Cuántica}
 
-\subsection{El Riesgo de la Brecha Tecnológica Cuántica (Quantum Divide)}
 La integración de la mecánica cuántica en los modelos de asignación de capital introduce un dilema ético profundo vinculado a la equidad distributiva de los mercados financieros internacionales. El despliegue operativo de algoritmos avanzados con preservación de simetría estructural como XY-QAOA exige infraestructuras de cómputo de altísimo coste financiero y un capital humano con una hiper-especialización en física cuántica y optimización matemática \cite{PMBOK2021}. Actualmente, estos recursos se encuentran concentrados de forma casi exclusiva en grandes corporaciones de banca de inversión, fondos de cobertura soberanos y laboratorios tecnológicos multinacionales.
 
 Esta distribución asimétrica del poder informático amenaza con instaurar una brecha tecnológica estructural denominada \textit{Quantum Divide} \cite{NisqSociety2022}. Las organizaciones capaces de explotar paisajes de soluciones financieras óptimas en tiempo real bajo restricciones duras de cardinalidad exacta obtendrán ventajas de arbitraje masivas frente a inversores minoristas o instituciones de economías emergentes que carecen de acceso a la nube cuántica. Esta dinámica puede exacerbar la desigualdad económica global y la concentración monopolística del capital. El proyecto asume la responsabilidad ética de mitigar esta asimetría mediante la publicación abierta de su código fuente, aportando una herramienta base que promueve la democratización tecnológica.
-
-\subsection{Gobernanza Algorítmica e Inestabilidad Sistémica}
-A nivel macroeconómico, el gobierno del algoritmo constituye una salvaguarda crítica ante el riesgo de correlación extrema. Si los modelos de optimización cuántica variacional acelerados (como el motor JaspQAOA acoplado a JAX) se despliegan de forma estandarizada en la industria sin mecanismos de control heterogéneos, múltiples fondos de inversión automatizados podrían converger de manera idéntica hacia los mismos vectores de activos óptimos de la frontera eficiente. 
-
-Esta sincronización algorítmica de la liquidez introduce el riesgo sistémico de inflar burbujas bursátiles artificiales en subconjuntos específicos de activos y, de forma paralela, desencadenar liquidaciones masivas en cascada ante variaciones imprevistas del mercado (\textit{flash crashes}). La arquitectura técnica implementada en el repositorio aborda este desafío ético mediante la inclusión de regularizaciones continuas Ridge $L_2$ y la sintonización dinámica del parámetro de aversión al riesgo ($\lambda$). Estos componentes actúan suavizando el paisaje de decisiones financieras y diversificando estructuralmente las carteras resultantes, operando como un freno de seguridad algorítmico frente a comportamientos de pánico colectivo automatizado.
-
-\subsection{Matriz de Evaluación de Impacto Ético (Deusto-IEEE)}
-Para operativizar y sintetizar los vectores de responsabilidad analizados bajo la normativa de la Universidad de Deusto \cite{DeustoEthics2024}, la Tabla \ref{tab:evaluacion_impacto_etica} detalla la correspondencia estricta entre las dimensiones de impacto identificadas, el nivel de gravedad del riesgo y las salvaguardas de ingeniería de software e ingeniería cuántica desplegadas en la lógica del framework.
-
-\begin{table}[htbp]
-    \centering
-    \caption{Matriz de gobernanza algorítmica y evaluación de impacto ético, social y ambiental del framework.}
-    \label{tab:evaluacion_impacto_etica}
-    \begin{tabular}{lp{4.2cm}ccp{4.2cm}}
-        \toprule
-        \textbf{Dimensión} & \textbf{Riesgo / Desafío Detectado} & \textbf{Gravedad} & \textbf{Módulo Técnico} & \textbf{Estrategia de Mitigación / Salvaguarda} \\
-        \midrule
-        \textbf{Ambiental} & Alto consumo energético en simulaciones clásicas de vectores de estado ($2^N$). & Moderado & \texttt{src/utils/} \texttt{test\_jax.py} & Optimización analítica del bucle mediante diferenciación automática y compilación JIT de JAX \cite{GreenQuantum2023}. \\
-        \addlinespace
-        \textbf{Socioeconómica} & Exclusión tecnológica y monopolio de hardware por la brecha cuántica. & Elevado & \texttt{scripts/} \texttt{configs/} & Publicación íntegra del repositorio bajo principios \textit{Open Science} para la democratización del código \cite{NisqSociety2022}. \\
-        \addlinespace
-        \textbf{Sistémica} & Correlación extrema de carteras y riesgo inducido de \textit{flash crashes}. & Crítico & \texttt{src/portfolio/} \texttt{build\_qubo} & Inyección de penalizaciones Ridge $L_2$ ($\alpha=0.1$) para suavizar el paisaje y forzar la diversificación de activos. \\
-        \bottomrule
-    \end{tabular}
-\end{table}

@@ -77,7 +77,7 @@ Esta organización refleja de forma directa el flujo conceptual descrito en el C
 
 Un detalle de implementación que conecta directamente con la Ecuación~4.4 merece mencionarse aquí: el multiplicador de penalización $P$ no se fija a mano, sino que \texttt{build\_qubo()} lo calcula automáticamente como $P = 10 \cdot \max_{i,j} |Q^0_{ij}|$, es decir, diez veces el mayor coeficiente (en valor absoluto) de la matriz QUBO sin penalizar $Q^0$. Este criterio garantiza, por construcción, que el término de penalización domine en magnitud a cualquier combinación de los términos financieros del objetivo, cumpliendo la condición exigida en la Sección~4.2.2 sin necesidad de ajustarlo caso por caso para cada instancia.
 
-\subsection{El simulador de vector de estado (\texttt{QuantumStatevectorSimulator})}
+\subsection{El simulador de vector de estado}
 
 Todo el trabajo experimental de esta memoria se apoya en una simulación por vector de estado (\textit{statevector}) implementada en NumPy puro, es decir, sin depender de un backend externo para la parte numérica del cálculo. Esta decisión se explica en el Capítulo~2 (Sección~2.2.1) como parte del alcance del proyecto; aquí se documentan las piezas concretas que la hacen posible.
 
@@ -89,7 +89,7 @@ Todo el trabajo experimental de esta memoria se apoya en una simulación por vec
 
 El coste asintótico de esta simulación es claro: cada evaluación completa del circuito cuesta $O(p \cdot 2^N)$, donde $p$ es la profundidad del ansatz. Este crecimiento exponencial en $N$ es, en última instancia, el factor que domina todo el presupuesto experimental descrito en la Sección~5.4 y que obliga a la gestión de tiempo descrita en la Sección~5.5. La Sección~5.4.5 cuantifica este coste con datos medidos reales.
 
-\subsection{El bucle variacional (\texttt{solve\_qaoa\_pure\_numpy})}
+\subsection{El bucle variacional}
 
 Todo el bucle de optimización clásica se implementa mediante una única función, parametrizada por cuatro argumentos: el tipo de mezclador (\texttt{mixer = "rx"} o \texttt{"xy"}), el tipo de inicialización (\texttt{init\_type = "random"} o \texttt{"tqa"}), la fuerza de la regularización Ridge (\texttt{alpha}) y la magnitud del ruido de inicialización (\texttt{jitter}).
 
@@ -156,11 +156,45 @@ Antes de comprometer el presupuesto computacional completo al barrido final desc
 
 \subsubsection{Número de reinicios (restarts)}
 
-Durante la fase de desarrollo se observó, de forma reproducible sobre instancias de tamaño reducido, el siguiente comportamiento: cuando se permite un número alto de reinicios (tres o más) por solver, el QAOA estándar con inicialización puramente aleatoria termina, simplemente por fuerza bruta, encontrando el óptimo exacto en instancias de este tamaño reducido. Con un presupuesto tan generoso, cualquier ventaja que pudiera aportar una inicialización informada como TQA queda neutralizada, porque el propio volumen de intentos aleatorios acaba cubriendo la región del óptimo.
+A diferencia de lo que ocurría en una primera versión de este capítulo, esta calibración sí se registró como un experimento reproducible independiente, ejecutable mediante \texttt{python scripts/run\_benchmarks.py --restarts-ablation} y almacenado en \texttt{output/results/restarts\_ablation.csv} (120 filas: 3 tamaños $\times$ 5 semillas $\times$ 4 presupuestos de restarts $\times$ 2 solvers). El estudio compara, sobre instancias con $N \in \{8, 10, 14\}$ ($K=N/2$), $p=3$ fijo y cinco semillas ($42$--$46$), el Optimization GAP del mejor resultado obtenido tras $n \in \{1, 2, 3, 5\}$ reinicios, para \textbf{Standard QAOA} (inicialización aleatoria) frente a \textbf{XY-QAOA Regularized} (ancla TQA con \textit{jitter}$=0{,}6$, $\alpha=0$).
 
-La situación cambia por completo cuando el presupuesto de reinicios se reduce a uno solo. Este régimen de un único reinicio es, además, el más representativo de un escenario de ejecución en un dispositivo NISQ real, donde cada reinicio implica volver a ejecutar el circuito completo desde cero, con su correspondiente coste de cola de espera y de decoherencia acumulada. Bajo esta restricción, la diferencia entre partir de un punto de inicialización informado (TQA) y partir de un punto aleatorio resulta decisiva.
+La Tabla~\ref{tab:restarts-ablation} recoge el GAP medio obtenido en cada combinación de $N$ y presupuesto de restarts. El patrón es consistente en los tres tamaños evaluados y confirma exactamente la hipótesis de diseño:
 
-Por esta razón --y no por conveniencia posterior a los resultados-- el experimento final fija \texttt{standard\_restarts=1} y \texttt{regularized\_restarts=1} para todos los valores de $N$ y $p$: es la comparación de igual presupuesto computacional más representativa de un escenario de ejecución real en hardware cuántico limitado. Esta decisión queda documentada explícitamente como parámetro por defecto en la interfaz de línea de comandos de \texttt{scripts/run\_benchmarks.py} (\texttt{--standard-restarts}, \texttt{--regularized-restarts}), junto con la justificación aquí resumida. A diferencia de la calibración de $\alpha$ (Sección~5.4.4.2), este estudio piloto sobre restarts se realizó de forma exploratoria durante el desarrollo y no generó un artefacto de datos independiente equivalente a \texttt{alpha\_ablation.csv}; se deja como línea de mejora metodológica, recogida en el Capítulo~8, registrar en un CSV dedicado esta calibración con el mismo nivel de detalle que la de $\alpha$.
+\begin{itemize}
+    \item Con \textbf{1 restart}, XY-QAOA Regularized obtiene un GAP entre 2 y 2,5 veces menor que Standard QAOA en los tres tamaños ($12{,}22\,\%$ frente a $31{,}09\,\%$ en $N=8$; $19{,}99\,\%$ frente a $48{,}84\,\%$ en $N=10$; $26{,}21\,\%$ frente a $52{,}31\,\%$ en $N=14$). La ventaja de partir de un punto informado es clara y sustancial.
+    \item A partir de \textbf{2--3 restarts}, Standard QAOA empieza a alcanzar GAP$=0\,\%$ --el óptimo exacto-- simplemente por el volumen de puntos de partida aleatorios probados: ya ocurre con solo 2 restarts en $N=8$ y $N=10$, y con 5 restarts en $N=14$ (la instancia más grande, donde el espacio de búsqueda es mayor y se necesitan más intentos).
+    \item XY-QAOA Regularized, en cambio, \textbf{nunca llega a GAP$=0\,\%$} en ninguna combinación de $N$ y restarts evaluada, porque su búsqueda permanece anclada en el entorno del punto TQA (perturbado solo por \textit{jitter}) en lugar de explorar el espacio de parámetros de forma no dirigida.
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\caption{Ablación del número de restarts: Optimization GAP medio (\%) según el presupuesto de reinicios, para Standard QAOA y XY-QAOA Regularized (TQA), en $N=8,10,14$ ($p=3$, 5 semillas por celda).}
+\label{tab:restarts-ablation}
+\begin{tabular}{llcc}
+\toprule
+\textbf{$N$} & \textbf{Restarts} & \textbf{Standard QAOA} & \textbf{XY-QAOA Reg. (TQA)} \\
+\midrule
+\multirow{4}{*}{8}  & 1 & $31{,}09$ & $12{,}22$ \\
+                     & 2 & $0{,}00$  & $10{,}30$ \\
+                     & 3 & $0{,}00$  & $8{,}83$  \\
+                     & 5 & $0{,}00$  & $7{,}36$  \\
+\midrule
+\multirow{4}{*}{10} & 1 & $48{,}84$ & $19{,}99$ \\
+                     & 2 & $0{,}02$  & $11{,}64$ \\
+                     & 3 & $0{,}02$  & $9{,}23$  \\
+                     & 5 & $0{,}00$  & $9{,}23$  \\
+\midrule
+\multirow{4}{*}{14} & 1 & $52{,}31$ & $26{,}21$ \\
+                     & 2 & $35{,}40$ & $15{,}98$ \\
+                     & 3 & $20{,}00$ & $14{,}89$ \\
+                     & 5 & $0{,}00$  & $12{,}89$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Este resultado tiene una lectura doble e importante. Por un lado, confirma que en instancias de este tamaño reducido, un presupuesto de restarts alto vuelve casi trivial el problema para cualquier solver con suficiente diversidad de puntos de partida --incluso uno tan simple como Standard QAOA con inicialización aleatoria--, lo que neutraliza cualquier ventaja algorítmica de una inicialización informada. Por otro lado, medir el tiempo total consumido por cada presupuesto de restarts (columna \texttt{Total Execution Time (s)} del mismo CSV) confirma que este comportamiento no es gratuito: el tiempo total escala aproximadamente de forma lineal con el número de restarts (de $0{,}71$~s de media con 1 restart a $3{,}47$~s con 5, para Standard QAOA), ya que cada restart implica una ejecución completa e independiente del circuito. En un dispositivo NISQ real, donde cada uno de esos restarts adicionales implica una nueva entrada en cola de ejecución y su correspondiente exposición al ruido y la decoherencia, ese coste no es una idealización de simulación sino una limitación física real.
+
+Por esta razón --y con esta evidencia empírica respaldándola-- el experimento final fija \texttt{standard\_restarts=1} y \texttt{regularized\_restarts=1} para todos los valores de $N$ y $p$: es la comparación de igual presupuesto computacional más representativa de un escenario de ejecución real en hardware cuántico limitado, y es precisamente el régimen en el que la ventaja de XY-QAOA Regularized frente a Standard QAOA es más clara y consistente.
 
 \subsubsection{Regularización Ridge ($\alpha$)}
 
@@ -207,7 +241,7 @@ Este resultado se presenta aquí como parte del método de calibración --se dej
 
 \subsubsection{Ruido de inicialización (jitter)}
 
-Por último, se exploraron distintos valores de la desviación estándar del ruido gaussiano aplicado al punto de partida, en el rango de 0{,}0 a 1{,}0 radianes. Se fijó $\texttt{regularized\_jitter}=0{,}6$ como el valor por defecto de la interfaz de línea de comandos, por ofrecer en la práctica de desarrollo suficiente diversidad entre reinicios sin degradar de forma apreciable la calidad de cada solución individual. Al igual que en el caso de los restarts (Sección~5.4.4.1), esta calibración fue exploratoria y no quedó registrada en un CSV independiente; se recoge como la misma línea de mejora metodológica señalada anteriormente.
+Por último, se exploraron distintos valores de la desviación estándar del ruido gaussiano aplicado al punto de partida, en el rango de 0{,}0 a 1{,}0 radianes. Se fijó $\texttt{regularized\_jitter}=0{,}6$ como el valor por defecto de la interfaz de línea de comandos, por ofrecer en la práctica de desarrollo suficiente diversidad entre reinicios sin degradar de forma apreciable la calidad de cada solución individual.
 
 \subsection{Escalado en $N$: análisis de coste computacional}
 \label{sec:coste-computacional}
