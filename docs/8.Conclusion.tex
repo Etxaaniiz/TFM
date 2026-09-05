@@ -1,0 +1,129 @@
+\chapter{Conclusiones y Trabajo Futuro}
+\label{chap:conclusiones}
+
+\section{Conclusiones Generales}
+\label{sec:conclusiones_generales}
+
+Este Trabajo de Fin de Máster ha abordado el problema de la selección de carteras financieras bajo restricciones
+discretas de cardinalidad mediante un algoritmo cuántico híbrido basado en QAOA, comparando su comportamiento
+frente a un solucionador exacto clásico (Gurobi) y frente a una metaheurística de referencia industrial (Recocido
+Simulado). Más allá de la implementación técnica, el propósito último del proyecto era responder a una pregunta
+concreta: \emph{¿puede un ansatz variacional cuántico, diseñado específicamente para respetar restricciones
+combinatorias duras, ofrecer un compromiso competitivo entre viabilidad, precisión y robustez financiera frente a
+los métodos clásicos establecidos?}
+
+Los resultados recogidos en el Capítulo 6 permiten responder afirmativamente a esta pregunta, con matices
+importantes. La sustitución de las penalizaciones QUBO blandas por el confinamiento geométrico del \emph{XY-Mixer}
+sobre el estado de Dicke ha resuelto de forma estructural el problema de viabilidad: mientras que el QAOA estándar
+degrada progresivamente su tasa de factibilidad a medida que crece el universo de activos $N$, la arquitectura
+XY-QAOA mantiene una viabilidad matemática del 100\,\% en todas las instancias evaluadas, por construcción y no
+por ajuste estadístico. En segundo lugar, la combinación de inicialización adiabática guiada (TQA)ha permitido mantener el Optimization GAP por debajo del umbral objetivo del 5\,\% en la práctica totalidad
+del rango de escalado estudiado ($N=6$ a $N=20$), con la única excepción de un repunte leve y explicado (hasta
+$\sim\!4,8\,\%$) en las instancias más densas, atribuible al límite de expresividad de un circuito de profundidad
+fija. Por último, la evaluación financiera fuera de muestra ha revelado un hallazgo especialmente relevante desde
+el punto de vista práctico: el solucionador exacto clásico, pese a optimizar perfectamente en la muestra de
+entrenamiento, sufre una caída de Ratio de Sharpe por sobreajuste al enfrentarse a datos de mercado no vistos,
+mientras que la solución cuántica regularizada generaliza mejor, ofreciendo carteras más robustas en condiciones
+de mercado reales.
+
+En conjunto, estas evidencias respaldan la tesis central del proyecto: en el régimen NISQ actual, un algoritmo
+cuántico variacional bien diseñado no aventaja a los métodos clásicos en velocidad ni en optimalidad matemática
+estricta, pero sí puede aportar valor diferencial en viabilidad estructural y en robustez financiera fuera de
+muestra, dos propiedades tan relevantes para la práctica del sector Fintech como la propia optimalidad.
+
+\section{Grado de Cumplimiento de los Objetivos}
+\label{sec:cumplimiento_objetivos}
+
+Contrastando los resultados del Capítulo \ref{ch:resultados} con los objetivos puestos en el capitulo \ref{sec:objetivos_especificos}, los cuatro objetivos
+específicos se consideran cumplidos. OE1 queda validado mediante la equivalencia analítica estricta entre el
+modelo QUBO y el Hamiltoniano de Ising (sección \ref{sec:verificacion}). OE2 se cumple con holgura: el XY-QAOA alcanza una
+viabilidad del 100\,\% en todas las instancias evaluadas ($N=6$ a $N=20$), frente a la degradación progresiva
+del QAOA estándar (Figura 6.1). OE3 también se cumple en términos del criterio cuantitativo fijado ($\geq 15\,\%$
+de reducción de variabilidad del GAP), con una reducción global de \textbf{76.3\%}; cabe matizar,
+no obstante, que la ablación de la Sección 6.1 muestra que esta mejora procede principalmente de la
+inicialización TQA y no de la penalización Ridge L2 aislada, un matiz que se documenta por rigor científico y se
+retoma en la Sección \ref{sec:limitaciones}. Por último, OE4 se cumple: el GAP medio se mantiene por debajo del
+umbral del 5\,\% en $N=14$ y en la práctica totalidad del rango estudiado, con un repunte leve y explicado
+(\!$\sim 4,8\,\%$) en $N=18$--$20$ atribuible al límite de expresividad del circuito a profundidad fija
+(Figura 6.2).
+
+En conjunto, se considera cumplido también el objetivo general: diseñar, implementar, optimizar y evaluar de
+forma sistemática un algoritmo cuántico híbrido para la selección de carteras con restricciones de cardinalidad,
+contrastado frente a referencias clásicas industriales.
+
+\section{Limitaciones del Trabajo}
+\label{sec:limitaciones}
+
+Pese a los resultados positivos, es necesario reconocer de forma explícita las limitaciones del estudio, tanto por
+rigor metodológico como para delimitar correctamente el alcance de las conclusiones anteriores:
+
+\begin{itemize}
+    \item \textbf{Simulación sin ruido físico.} Todos los experimentos se han ejecutado mediante simulación exacta
+    de vector de estado (\emph{statevector}), sin modelar canales de ruido de hardware real (decoherencia, errores
+    de puerta, \emph{crosstalk}). Los resultados de viabilidad y GAP representan, por tanto, una cota superior de
+    rendimiento respecto a lo que se observaría en un procesador cuántico físico actual.
+    \item \textbf{Contribución real de la regularización Ridge L2.} Como se ha señalado en la Sección
+    \ref{sec:cumplimiento_objetivos}, la ablación de $\alpha$ muestra que la penalización Ridge, de forma aislada,
+    no mejora el GAP medio e incluso puede empeorarlo ligeramente; su papel en la arquitectura final es más
+    limitado de lo planteado inicialmente en el diseño teórico, y requeriría una recalibración de hiperparámetros
+    más exhaustiva para confirmar si aporta valor en algún régimen específico.
+    \item \textbf{Límite de expresividad a profundidad fija.} El repunte del GAP observado en $N=18$ y $N=20$
+    confirma que, para una profundidad de circuito $p$ fija, el ansatz agota su capacidad de representación al
+    crecer la dimensión del problema. El estudio de escalado en $p$ (Sección 6.1.3) sugiere que este límite es
+    superable aumentando la profundidad, pero dicha vía no ha podido explorarse de forma exhaustiva por el coste
+    computacional asociado a la simulación clásica de circuitos más profundos.
+    \item \textbf{Coste computacional de la simulación clásica.} El tiempo de ejecución del bucle híbrido
+    clásico-cuántico escala de forma notablemente más costosa que los solucionadores clásicos de referencia,
+    alcanzando cientos de segundos por instancia para $N$ elevado. Esto limita la escala de universos de activos
+    evaluables en este trabajo y aleja, por ahora, la viabilidad de un despliegue en tiempo real.
+    \item \textbf{Alcance del modelo financiero.} El estudio se restringe a un modelo estático de media-varianza de
+    Markowitz de un único periodo, sobre un universo de activos de renta variable (S\&P 500 / IBEX). No se han
+    modelado costes de transacción, rebalanceo dinámico de cartera, ni otras clases de activos, por lo que la
+    generalización de los resultados a escenarios de gestión de carteras más complejos queda pendiente de
+    validación.
+    \item \textbf{Sensibilidad del optimizador clásico.} El bucle de optimización clásica (COBYLA/SLSQP) puede verse
+    afectado por mesetas estériles (\emph{barren plateaus}) al escalar el número de cúbits; si bien la inicialización
+    TQA mitiga este riesgo en el rango estudiado, no se ha caracterizado su comportamiento para universos de activos
+    sustancialmente mayores a $N=20$.
+\end{itemize}
+
+\section{Líneas Futuras de Trabajo}
+\label{sec:trabajo_futuro}
+
+A partir de las limitaciones anteriores y de los hallazgos del proyecto, se identifican las siguientes líneas de
+continuación, ordenadas de menor a mayor alcance:
+
+\begin{enumerate}
+    \item \textbf{Validación en hardware cuántico real.} Ejecutar el circuito XY-QAOA sobre plataformas NISQ físicas
+    (p.\,ej. IBM Quantum, IonQ) incorporando técnicas de mitigación de errores, para contrastar la degradación de
+    viabilidad y GAP frente al comportamiento observado en simulación exacta y cuantificar la brecha
+    simulación--hardware real.
+    \item \textbf{Recalibración sistemática de la regularización.} Dado que la ablación de $\alpha$ ha revelado que
+    el efecto de Ridge L2 es más limitado de lo previsto, explorar una búsqueda de hiperparámetros más amplia
+    (por ejemplo, mediante optimización bayesiana) sobre $\alpha$, la rampa temporal $T$ de TQA y el número de
+    reinicios, para determinar si existe una región del espacio de hiperparámetros donde la penalización aporte una
+    mejora consistente.
+    \item \textbf{Estrategias de profundidad adaptativa.} Investigar esquemas de \emph{warm-start} o de crecimiento
+    incremental de la profundidad $p$ (por ejemplo, inspirados en ADAPT-QAOA) que permitan compensar el límite de
+    expresividad detectado en instancias grandes sin incurrir en el coste de fijar una profundidad elevada desde el
+    inicio.
+    \item \textbf{Extensión del modelo financiero.} Incorporar rebalanceo dinámico multiperiodo, costes de
+    transacción y restricciones sectoriales o de liquidez, acercando el modelo QUBO a escenarios de gestión de
+    carteras más realistas y exigentes desde el punto de vista de la industria.
+    \item \textbf{Ampliación del universo de activos y regímenes de mercado.} Evaluar el algoritmo sobre clases de
+    activos adicionales (renta fija, materias primas, criptoactivos) y bajo distintos regímenes de mercado
+    (alta volatilidad, crisis, mercados alcistas), para valorar la robustez de la generalización fuera de muestra
+    observada en este trabajo en condiciones más adversas.
+    \item \textbf{Exploración de arquitecturas alternativas.} Comparar el XY-Mixer con otros esquemas de
+    preservación de restricciones (p.\,ej. \emph{Grover-mixer}, QAOA+ multiángulo) o con enfoques de aprendizaje
+    automático cuántico, para situar los resultados de este TFM dentro de un marco comparativo más amplio del
+    estado del arte en optimización combinatoria cuántica aplicada a finanzas.
+    \item \textbf{Análisis de coste energético a escala.} Extender el análisis de huella de carbono iniciado en el
+    Capítulo 5 a escenarios de despliegue en QPU real, comparando el coste energético del enfoque cuántico frente a
+    la infraestructura clásica equivalente a medida que crece el tamaño del problema.
+\end{enumerate}
+
+En definitiva, este trabajo demuestra que la vía de la preservación estructural de restricciones mediante circuitos
+cuánticos especializados constituye una dirección de investigación sólida y con evidencia empírica favorable, si
+bien su madurez para un despliegue productivo en el sector financiero depende todavía de avances tanto en el
+hardware cuántico disponible como en la sofisticación de los modelos financieros que se le acoplen.

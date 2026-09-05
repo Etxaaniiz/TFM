@@ -216,6 +216,96 @@ def run_alpha_ablation(alpha_on=ALPHA_ABLATION_ON, jitter=0.6):
     print(f"\n[OK] Resultados de la ablacion de alpha guardados en: {out_csv}")
 
 
+# ============================================================================
+# RESTARTS ABLATION (n_restarts in {1,2,3,5}: Standard QAOA vs. XY-QAOA Regularized)
+# ============================================================================
+
+RESTARTS_ABLATION_NS = [8, 10, 14]
+RESTARTS_ABLATION_SEEDS = [42, 43, 44, 45, 46]
+RESTARTS_ABLATION_P = 3
+RESTARTS_ABLATION_COUNTS = [1, 2, 3, 5]
+RESTARTS_ABLATION_JITTER = 0.6
+
+
+def run_restarts_ablation():
+    """Compares Standard QAOA (RX, random init) vs. XY-QAOA Regularized (XY,
+    TQA init + jitter, alpha=0.0) as n_restarts grows, on N in {8,10,14}.
+    Reuses run_qaoa_restarts for each batch and keeps the best-of-restarts
+    GAP plus the summed execution time across the whole batch, so the plot
+    can show whether more restarts closes (or reverses) the gap between the
+    two solvers and at what wall-clock cost."""
+    print("=" * 70)
+    print("ABLACION DE N_RESTARTS: Standard QAOA vs. XY-QAOA Regularized")
+    print(f"  N in {RESTARTS_ABLATION_NS} | seeds={RESTARTS_ABLATION_SEEDS} | "
+          f"p={RESTARTS_ABLATION_P} | n_restarts in {RESTARTS_ABLATION_COUNTS}")
+    print("=" * 70)
+
+    processed_dir = os.path.join(project_root, "data", "processed")
+    all_tickers, mu_is_all, cov_is_all, mu_oos_all, cov_oos_all = load_regime_data(processed_dir)
+    ticker_orders = {seed: get_nested_ticker_order(all_tickers, seed) for seed in RESTARTS_ABLATION_SEEDS}
+
+    rows = []
+    maxiter_qaoa = get_cobyla_maxiter(RESTARTS_ABLATION_P)
+
+    for N in RESTARTS_ABLATION_NS:
+        K = N // 2
+        print(f"\n--- N={N}, K={K} ---")
+        for seed in RESTARTS_ABLATION_SEEDS:
+            selected_tickers = select_prefix_tickers(ticker_orders[seed], N)
+            mu_is = mu_is_all.loc[selected_tickers].values
+            cov_is = cov_is_all.loc[selected_tickers, selected_tickers].values
+            mu_oos = mu_oos_all.loc[selected_tickers].values
+            cov_oos = cov_oos_all.loc[selected_tickers, selected_tickers].values
+
+            Q = build_qubo(mu_is, cov_is, K, lambda_val=0.5)
+            inst = {
+                'dataset': 'real_finance_SP500_IBEX',
+                'instance_id': f"restarts_N{N}_K{K}_s{seed}",
+                'N': N, 'K': K, 'mu': mu_is, 'Sigma': cov_is, 'Q': Q,
+                'lambda_val': 0.5, 'seed': seed, 'tickers': selected_tickers,
+            }
+
+            res_gurobi = solve_gurobi(inst, lambda_val=0.5)
+            gurobi_obj = res_gurobi['objective']
+
+            for n_restarts in RESTARTS_ABLATION_COUNTS:
+                runs_standard = run_qaoa_restarts(
+                    inst=inst, p=RESTARTS_ABLATION_P, n_restarts=n_restarts, maxiter=maxiter_qaoa,
+                    gurobi_obj=gurobi_obj, mu_oos=mu_oos, cov_oos=cov_oos, k_cardinality=K,
+                    experiment_phase="restarts_ablation", solver_name="Standard QAOA",
+                    mixer="rx", init_type="random", alpha=0.0, seed_offset=1,
+                )
+                runs_regularized = run_qaoa_restarts(
+                    inst=inst, p=RESTARTS_ABLATION_P, n_restarts=n_restarts, maxiter=maxiter_qaoa,
+                    gurobi_obj=gurobi_obj, mu_oos=mu_oos, cov_oos=cov_oos, k_cardinality=K,
+                    experiment_phase="restarts_ablation", solver_name="XY-QAOA Regularized",
+                    mixer="xy", init_type="tqa", alpha=0.0, seed_offset=2,
+                    jitter=RESTARTS_ABLATION_JITTER,
+                )
+
+                for solver_name, restart_runs in [("Standard QAOA", runs_standard), ("XY-QAOA Regularized", runs_regularized)]:
+                    best_gap = restart_runs[0]["gap_best_of_restarts"]
+                    total_time = sum(row["Execution Time (s)"] for row in restart_runs)
+
+                    rows.append({
+                        "N": N, "K": K, "p": RESTARTS_ABLATION_P, "seed": seed,
+                        "n_restarts": n_restarts, "Solver": solver_name,
+                        "Optimization GAP (%)": best_gap,
+                        "Total Execution Time (s)": total_time,
+                    })
+
+                print(f"  Seed {seed} | n_restarts={n_restarts} | Gurobi: {gurobi_obj:.4f} | "
+                      f"Standard GAP: {rows[-2]['Optimization GAP (%)']:.2f}% (t={rows[-2]['Total Execution Time (s)']:.3f}s) | "
+                      f"XY-Reg GAP: {rows[-1]['Optimization GAP (%)']:.2f}% (t={rows[-1]['Total Execution Time (s)']:.3f}s)")
+
+    df_ablation = pd.DataFrame(rows)
+    out_dir = os.path.join(project_root, "output", "results")
+    os.makedirs(out_dir, exist_ok=True)
+    out_csv = os.path.join(out_dir, "restarts_ablation.csv")
+    df_ablation.to_csv(out_csv, index=False)
+    print(f"\n[OK] Resultados de la ablacion de restarts guardados en: {out_csv}")
+
+
 def run_benchmarks(
     quick_mode=False,
     max_n=20,
@@ -499,10 +589,15 @@ if __name__ == "__main__":
     parser.add_argument("--regularized-jitter", type=float, default=0.6, help="Ruido gaussiano (std, en rad) sobre el ancla TQA por restart, para que los restarts no sean copias identicas")
     parser.add_argument("--max-hours", type=float, default=4.0, help="Presupuesto maximo de tiempo de ejecucion, en horas")
     parser.add_argument("--alpha-ablation", action="store_true", help="Ejecutar unicamente la ablacion de alpha (Ridge on/off, N<=14) y guardar output/results/alpha_ablation.csv")
+    parser.add_argument("--restarts-ablation", action="store_true", help="Ejecutar unicamente la ablacion de n_restarts (Standard QAOA vs. XY-QAOA Regularized, N en {8,10,14}) y guardar output/results/restarts_ablation.csv")
     args = parser.parse_args()
 
     if args.alpha_ablation:
         run_alpha_ablation(alpha_on=args.regularized_alpha, jitter=args.regularized_jitter)
+        sys.exit(0)
+
+    if args.restarts_ablation:
+        run_restarts_ablation()
         sys.exit(0)
 
     run_benchmarks(

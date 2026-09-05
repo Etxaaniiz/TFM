@@ -251,7 +251,7 @@ def run_variance_analysis():
     ax2.set_ylabel("Desviación Estándar del GAP (%)")
     ax2.set_title(
         "Reducción de Varianza Inter-Semilla del GAP de Optimización\n"
-        "mediante Regularización Ridge + Inicialización TQA",
+        "mediante Inicialización TQA",
         weight='bold', pad=12
     )
     ax2.set_xticks(Ns_arr)
