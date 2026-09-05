@@ -29,7 +29,7 @@ Para garantizar un control del alcance, el proyecto se ha estructurado en cinco 
         \item \textit{T3.1. Pipeline de datos de mercado y preprocesado financiero:} Implementación de la ingesta automatizada desde Yahoo Finance, cálculo de retornos logarítmicos continuos, matrices de covarianza anualizadas y división temporal \textit{In-Sample} / \textit{Out-of-Sample}.
         \item \textit{T3.2. Implementación de estados de Dicke y transpilación del XY-Mixer:} Programación en el framework \texttt{Qrisp} del circuito determinista de preparación del estado de Dicke $|D_K^N\rangle$ y síntesis del mezclador $XY$ sobre topología de acoplamiento lineal y en anillo.
         \item \textit{T3.3. Esquema de regularización bicapa TQA y Ridge $L_2$:} Desarrollo de la clase \texttt{RegularizedQAOAProblem} para calcular ángulos de inicio adiabáticos (TQA) e integrar la penalización continua cuadrática en el optimizador clásico COBYLA.
-        \item \textit{T3.4. Integración de solvers clásicos de referencia:} Implementación de la interfaz con Gurobi Optimizer (\textit{Branch-and-Bound}) y Simulated Annealing (\texttt{dwave-neal}), y creación de la suite de tests unitarios (\texttt{tests/}).
+        \item \textit{T3.4. Integración de solvers clásicos de referencia y verificación del software:} Implementación de la interfaz con Gurobi Optimizer (\textit{Branch-and-Bound}) y Simulated Annealing (\texttt{dwave-neal}), declaración de \texttt{pytest} como dependencia de verificación y desarrollo del script de comprobación por fuerza bruta del mapeo QUBO--Ising descrito en la Sección~\ref{sec:verificacion}.
     \end{itemize}
 
     \item \textbf{4: Experimentación, Simulación y Benchmarking}
@@ -82,7 +82,7 @@ El Cuadro~\ref{tab:desglose_horas_tareas} detalla la distribución exacta de las
         \textbf{WP3: Software} & T3.1. Pipeline de descarga y preprocesado de datos de mercado & 10 \\
         & T3.2. Implementación de estados de Dicke y transpilador XY-Mixer en Qrisp & 12 \\
         & T3.3. Desarrollo del módulo de regularización bicapa TQA + Ridge $L_2$ & 13 \\
-        & T3.4. Integración de solvers clásicos (Gurobi, SA) y tests unitarios & 10 \\
+        & T3.4. Integración de solvers clásicos (Gurobi, SA) y verificación & 10 \\
         \multicolumn{2}{l}{\textbf{Subtotal WP3 (Desarrollo de Código)}} & \textbf{45} \\
         \midrule
         \textbf{WP4: Experim.} & T4.1. Ejecución de campañas de simulación & 23 \\
@@ -172,8 +172,8 @@ y el soporte auxiliar en la nube:
           temporal para la ejecución paralela y desatendida de campañas de calibración e 
           hiperparametrización sin bloquear la estación de trabajo local: 60{,}00~\euro.
     \item \textbf{Herramientas de Versionado y Repositorio:} Uso de planes estándar de 
-          almacenamiento estructurado y pipelines de integración continua en GitHub: 0{,}00~\euro\ 
-          (cobertura bajo nivel académico/abierto).
+      almacenamiento estructurado y pipelines de integración continua en GitHub\footnote{Repositorio público del proyecto: \url{https://github.com/Etxaaniiz/TFM}.}: 0{,}00~\euro\ 
+      (cobertura bajo nivel académico/abierto).
 \end{itemize}
 
 \subsection{Presupuesto Total}
@@ -193,7 +193,7 @@ proyecto.
         \textbf{Categoría} & \textbf{Concepto / Descripción} & \textbf{Base de Cálculo} & \textbf{Coste (€)} \\
         \midrule
         \textbf{Recursos Humanos} & Dedicación individual en ingeniería cuántica y finanzas & 200 h $\times$ 35 €/h & 7.000,00 \\
-        \textbf{Equipamiento Local} & Amortización estación de trabajo (Intel i7, 32 GB RAM) & 5 meses (vida útil 36 m.) & 208 \\
+        \textbf{Equipamiento Local} & Amortización estación de trabajo (Intel i7, 16 GB RAM) & 5 meses (vida útil 36 m.) & 208 \\
         \textbf{Energía y Suministros} & Consumo eléctrico simulación statevectors ($2^{20}$) & Estimación 250 W carga & 45,00 \\
         \textbf{Infraestructura Cloud} & Suscripción Google Colab Pro para ejecuciones en paralelo & 5 meses $\times$ 12 €/mes & 60,00 \\
         \textbf{Software y Licencias} & Frameworks Open Source (\texttt{Qrisp}, \texttt{dwave}) y Gurobi Académico & Licencias Open / Free & 0,00 \\

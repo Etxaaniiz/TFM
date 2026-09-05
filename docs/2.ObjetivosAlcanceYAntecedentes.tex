@@ -68,22 +68,48 @@ Para dar cumplimiento estructurado y medible al objetivo general, se establecen 
 
 \end{itemize}
 
-\iffalse
-\begin{enumerate}
+\subsection{Hipótesis de Trabajo}
+\label{sec:hipotesis}
 
-    \item \textbf{OE1. Analizar el estado del arte y fundamentar el marco teórico:} Revisar exhaustivamente la literatura científica sobre la Teoría Moderna de Carteras de Markowitz, los algoritmos de optimización cuadrática entera mixta (MIQP) y el Algoritmo de Optimización Cuántica Aproximada (QAOA) en la era NISQ, identificando las limitaciones de los enfoques estándar basados en penalizaciones cuadráticas (QUBO).
-    
-    \item \textbf{OE2. Recopilar, depurar y modelar los datos financieros reales:} Diseñar un pipeline de ingesta y procesamiento de series temporales históricas procedentes de mercados regulados (S\&P 500 e IBEX 35), caracterizando diferentes regímenes de mercado (estable, volátil e inflacionario) para la estimación de matrices de covarianza y vectores de retorno esperado.
-    
-    \item \textbf{OE3. Formular y verificar el mapeo algebraico a estructuras cuánticas:} Construir la formulación matemática del problema de selección de carteras con cardinalidad fija y derivar su equivalencia exacta hacia Hamiltonianos de espín de Ising, validando analíticamente la correspondencia energética sobre el espectro de configuraciones discretas.
-    
-    \item \textbf{OE4. Diseñar e implementar el circuito variacional con preservación de simetría (XY-QAOA):} Desarrollar en código cuántico una arquitectura basada en la preparación determinista de estados de Dicke ($|D_K^N\rangle$) y operadores de mezcla $XY$, garantizando por construcción el confinamiento estricto de las soluciones dentro del subespacio factible ($100\%$ de viabilidad).
-    
-    \item \textbf{OE5. Estabilizar y optimizar el bucle variacional híbrido:} Incorporar un esquema de regularización bicapa compuesto por inicialización adiabática troterizada (TQA) y penalización continua Ridge $L_2$, con el fin de mitigar el impacto de las mesetas estériles (\textit{barren plateaus}) y reducir el coste computacional del optimizador clásico.
-    
-    \item \textbf{OE6. Evaluar experimentalmente y contrastar el rendimiento frente a solucionadores clásicos:} Diseñar y ejecutar una campaña de simulación escalable (desde $N=6$ hasta $N=20$ cúbits), comparando cuantitativamente el modelo propuesto frente a solucionadores deterministas exactos industriales (Gurobi Optimizer) y metaheurísticas estocásticas (Simulated Annealing) en términos de \textit{Optimization GAP}, Ratio de Sharpe y coste temporal.
-\end{enumerate}
-\fi
+A partir del problema planteado, del análisis del estado del arte y de las limitaciones
+documentadas en las formulaciones estándar de QAOA para problemas combinatorios con
+restricciones, se establecen las siguientes hipótesis de trabajo, que guían el diseño
+experimental del proyecto y que se contrastan explícitamente en la
+Sección~\ref{sec:cumplimiento_objetivos} del Capítulo~\ref{chap:conclusiones}:
+
+\begin{itemize}
+    \item \textbf{H1.} La incorporación explícita de la restricción de cardinalidad en la
+    propia dinámica del circuito (inicialización en estado de Dicke + mezclador $XY$)
+    produce una tasa de factibilidad estructural superior a la del QAOA estándar con
+    penalización cuadrática, y esta ventaja se acentúa a medida que crece $N$.
+
+    \item \textbf{H2.} Una inicialización de los parámetros variacionales basada en
+    \textit{Trotterized Quantum Annealing} (TQA) proporciona un punto de partida más
+    informado que una inicialización aleatoria, reduciendo la variabilidad entre semillas
+    del resultado final del optimizador clásico.
+
+    \item \textbf{H3.} La incorporación de una penalización continua Ridge $L_2$ sobre la
+    trayectoria de los parámetros aporta, de forma aislada, una mejora adicional y
+    consistente sobre la estabilidad o calidad de la solución respecto a usar únicamente
+    inicialización TQA.
+
+    \item \textbf{H4.} Un XY-QAOA regularizado, evaluado bajo simulación clásica exacta y
+    un único reinicio por semilla, alcanza una calidad de solución (GAP de optimización) y
+    una robustez financiera fuera de muestra (Sharpe OOS) competitivas frente a
+    solucionadores clásicos de referencia --el óptimo exacto (Gurobi) y una metaheurística
+    estocástica simple (Simulated Annealing).
+
+    \item \textbf{H5.} Para una profundidad de circuito $p$ fija, el ansatz XY-QAOA agota
+    su capacidad de representación al crecer $N$, lo que se traduce en un repunte del GAP
+    en las instancias de mayor tamaño estudiadas.
+\end{itemize}
+
+Estas hipótesis no se plantean como resultados asumidos de antemano, sino como
+proposiciones que se contrastan mediante el diseño experimental descrito en el
+Capítulo~\ref{ch:desarrollo} y los resultados del Capítulo~\ref{ch:resultados}. El grado
+de confirmación de cada una se resume explícitamente en la
+Sección~\ref{sec:cumplimiento_objetivos}.
+
 % ==============================================================================
 % 2.2. ALCANCE Y DELIMITACIÓN DEL ESTUDIO
 % ==============================================================================
@@ -203,6 +229,49 @@ registro \cite{McClean2018}. El mecanismo formal de ambas patologías, así
 como la arquitectura propuesta en este trabajo para superarlas, se
 desarrolla en detalle en la Sección \ref{subsec:barren_plateaus} del
 Capítulo \ref{ch:marco_teorico}.
+
+\subsection{Trabajos relacionados: mezcladores XY, inicialización TQA y QAOA en carteras}
+\label{subsec:trabajos_relacionados}
+
+La restricción del espacio de búsqueda mediante mezcladores que preservan el peso de
+Hamming fue formalizada dentro del marco general del \textit{Quantum Alternating
+Operator Ansatz}, y su aplicación específica a mezcladores $XY$ inicializados en estados
+de Dicke ha sido validada tanto en simulación como en hardware real de trampa de iones
+por He et al. \cite{He2023}, quienes muestran que la alineación entre el estado inicial y
+el mezclador mejora sistemáticamente el rendimiento de QAOA en problemas con
+restricciones. Niroula et al. \cite{Niroula2022} aplican un enfoque análogo a un problema
+de resumen extractivo, confirmando la generalidad de esta familia de mezcladores más allá
+de las finanzas. Brandhofer et al. \cite{Brandhofer2022} realizan un \textit{benchmarking}
+sistemático de QAOA aplicado a optimización de carteras, comparando distintas
+formulaciones, tamaños de universo y estrategias de penalización frente a solucionadores
+clásicos, en línea metodológica con el enfoque comparativo adoptado en este trabajo.
+
+Frente al trabajo de Mancilla et al. \cite{Mancilla2026} --la propuesta más cercana en la
+literatura--, este TFM aporta una caracterización experimental más sistemática del punto
+de ruptura entre viabilidad estructural y competitividad en calidad de solución, en lugar
+de limitarse a un único escenario de mercado favorable.
+
+El trabajo más directamente comparable a esta propuesta es el de Mancilla et al.
+\cite{Mancilla2026}, quienes combinan igualmente inicialización en estado de Dicke,
+mezclador $XY$ e inicialización troterizada de tipo adiabático para la selección de
+carteras bajo restricción de cardinalidad, evaluando su enfoque mediante \textit{backtesting}
+sobre datos reales de mercado. A diferencia de dicho trabajo, que reporta una ventaja de
+Sharpe Ratio del enfoque cuántico frente a Simulated Annealing en un backtest de
+\textit{walk-forward} sobre 10 activos con una única ventana temporal, este TFM evalúa el
+comportamiento del algoritmo bajo un barrido sistemático de tamaño de universo
+($N=6$ a $N=20$) y de profundidad de circuito, y bajo el régimen de un único reinicio por
+semilla —más representativo del coste de ejecución en hardware NISQ real que el mejor de
+varios reinicios—, lo que permite caracterizar de forma más granular el punto exacto en el
+que la ventaja de factibilidad estructural del enfoque cuántico se traduce, o no, en una
+ventaja de calidad de solución frente a una metaheurística clásica simple.
+
+Por último, la estrategia de inicialización basada en \textit{Trotterized Quantum
+Annealing} adoptada en la Sección~\ref{sec:estabilizacion_optimizacion} del
+Capítulo~\ref{ch:marco_teorico} tiene su origen en el trabajo de Sack y Serbyn
+\cite{SackSerbyn2021}, quienes demuestran que esta inicialización permite evitar mínimos
+falsos en el paisaje de optimización de QAOA para un amplio rango de pasos temporales de
+Trotter, con un rendimiento comparable al mejor resultado obtenido tras un número
+exponencialmente creciente de inicializaciones aleatorias.
 
 % ==============================================================================
 % 2.4. SÍNTESIS COMPARATIVA Y POSICIONAMIENTO DEL TRABAJO
